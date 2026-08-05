@@ -88,7 +88,28 @@ as versões concluídas.
 ## Incorporação segura de um SQLite existente
 
 A baseline SQLite é deliberadamente opt-in. Antes de gravar qualquer entrada,
-o callback `beforeBaseline` confere:
+duas guardas complementares são executadas no evento `beforeBaseline`:
+
+- `SQLiteLegacyBaselineCallback` calcula uma assinatura SHA-256 canônica de
+  todo o catálogo persistente e exige correspondência exata com o único legado
+  conhecido e aceito;
+- `beforeBaseline__verify_legacy_schema.sql` mantém as validações de conteúdo
+  necessárias para que todos os registros caibam nas constraints de V2.
+
+A assinatura aceita é
+`f8d17cb13b640a8fc723887749da512a7ba681feebedf3afb7136c254c5365d6`. A
+serialização canônica usa registros com tamanho prefixado e considera:
+
+- todos os objetos de usuário de `sqlite_schema`, incluindo o DDL normalizado
+  de tabelas, índices, triggers e views;
+- ordem, nome, tipo, nulabilidade, default, PK e estado de colunas normais ou
+  geradas por `pragma_table_xinfo`;
+- FKs completas por `pragma_foreign_key_list`;
+- unicidade, origem, parcialidade, ordem, direção, expressão e collation de
+  índices por `pragma_index_list` e `pragma_index_xinfo`;
+- opções `STRICT` e `WITHOUT ROWID` por `pragma_table_list`.
+
+Depois da correspondência integral do schema, a guarda SQL ainda confere:
 
 - as cinco tabelas, colunas, tipos, nulabilidade e chaves primárias de V1;
 - as três unicidades naturais e os dez índices legados;
@@ -96,8 +117,11 @@ o callback `beforeBaseline` confere:
 - enums, booleanos, quantidades, limites de texto e estado/responsável;
 - compatibilidade de todos os registros com as constraints de V2.
 
-Se qualquer verificação falhar, a aplicação encerra e nem mesmo a tabela
-`flyway_schema_history` é criada.
+Qualquer objeto adicional, definição diferente ou falha de conteúdo encerra a
+aplicação antes da criação de `flyway_schema_history`. A normalização remove
+somente diferenças irrelevantes de espaçamento e caixa de palavras SQL; um
+schema apenas equivalente, mas não pertencente ao legado conhecido, pode ser
+rejeitado deliberadamente.
 
 Primeiro ensaie sempre numa cópia:
 
