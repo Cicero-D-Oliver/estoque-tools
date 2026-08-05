@@ -67,7 +67,7 @@ O backend foi endurecido sem implementar autenticação e sem alterar a arquitet
 - `@Version` em usuário, item e ferramenta para concorrência otimista.
 - HTTP 409 uniforme para atualização concorrente.
 - Checks de quantidade não negativa e coerência estado/responsável.
-- `UNIQUE` nomeados foram declarados nas entidades para e-mail, código e patrimônio. O smoke test corrigido demonstrou que o dialect SQLite não materializa essas constraints em um banco novo; a garantia no banco permanece pendente até a adoção de migrações e a validação PostgreSQL.
+- `UNIQUE` nomeados foram declarados nas entidades para e-mail, código e patrimônio. A etapa posterior de Flyway materializou e validou essas garantias no SQLite; a execução real da variante PostgreSQL continua pendente por ausência de servidor.
 - FKs obrigatórias em movimentações.
 - Tamanhos de coluna alinhados às validações.
 - Índices adicionados para ativos, categorias, status, responsável, FKs e data dos históricos.
@@ -79,7 +79,7 @@ O backend foi endurecido sem implementar autenticação e sem alterar a arquitet
 - Services usam transação somente leitura por padrão.
 - Todas as escritas sobrescrevem com `@Transactional` normal.
 - Alteração do saldo/status e criação do log pertencem à mesma transação; uma falha causa rollback integral.
-- O tratamento HTTP 409 para conflitos de integridade existe, mas a janela residual entre `exists` e `insert` só estará garantida após as constraints serem materializadas por migrações. No SQLite novo, a proteção atualmente comprovada é a validação da aplicação.
+- O tratamento HTTP 409 para conflitos de integridade existe, e as constraints materializadas pelo Flyway agora fecham no SQLite a janela residual entre `exists` e `insert`. A mesma garantia PostgreSQL está preparada no DDL, mas ainda requer execução real.
 - Não há código assíncrono, threads manuais, streams paralelos ou coleções compartilhadas.
 
 ## Performance
@@ -154,7 +154,7 @@ Limitação de validação: Docker não está instalado na máquina de execuçã
 |---|---|
 | `mvn clean verify` | sucesso |
 | Testes de integração | 13/13 |
-| Cobertura JaCoCo | 93,20% linhas; 90,13% instruções; 63,95% branches |
+| Cobertura JaCoCo (execução após Flyway) | 93,25% linhas; 90,14% instruções; 64,29% branches |
 | Smoke test original de 2026-08-04 | JAR iniciou, mas o isolamento alegado era inválido: foi usada `DB_URL`, ignorada pelo profile SQLite, e `estoque.db` foi atualizado |
 | Smoke test corrigido de 2026-08-05 | sucesso em banco exclusivo via `SQLITE_URL`, com duas inicializações e remoção após o teste |
 | Banco isolado comprovado | `target/smoke-test/7c4a143bf2e24f16a78c7537ac7c4871/smoke.db`, SHA-256 `83321B4FFE61FE92A546B0ED1AEC8DF8776DD85F3FBF89835FC01B723491B521` |
@@ -192,10 +192,9 @@ Durante essa reprodução, um SQLite novo também revelou que `data.sql` dependi
 ### P1 — antes de produção
 
 1. Implementar autenticação/autorização (fora do escopo solicitado).
-2. Adotar Flyway/Liquibase e `ddl-auto=validate` em produção.
-3. Paginar listagens e históricos.
-4. Executar testes PostgreSQL e de concorrência com Testcontainers.
-5. Validar e executar o Compose em host com Docker.
+2. Paginar listagens e históricos.
+3. Executar migrações e testes PostgreSQL, incluindo concorrência, com Testcontainers.
+4. Validar e executar o Compose em host com Docker.
 
 ### P2 — evolução recomendada
 

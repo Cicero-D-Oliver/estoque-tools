@@ -2,6 +2,63 @@
 
 Todas as alterações relevantes são documentadas neste arquivo.
 
+## [Não lançado] — 2026-08-05 — Migrações Flyway
+
+### Segurança e reprodutibilidade do schema
+
+- Criada a branch `feature/flyway-migrations` a partir do baseline Git limpo.
+- Gerados e validados backups adicionais do projeto inteiro e de `estoque.db`
+  antes de qualquer alteração.
+- Adicionados `flyway-core` e o módulo PostgreSQL na versão 11.7.2 gerenciada
+  pelo Spring Boot 3.5.16.
+- Substituído `ddl-auto=update`/`create-drop` por `ddl-auto=validate` nos profiles
+  SQLite, PostgreSQL e de testes.
+- Desabilitados a inicialização automática por `data.sql`, o baseline automático
+  e o `clean` do Flyway.
+- Separadas migrações SQLite e PostgreSQL porque identidade, constraints,
+  afinidade de tipos e evolução de tabelas não são portáveis entre os vendors.
+
+### Migrações
+
+- Criadas `V1__create_initial_schema.sql` e
+  `V2__enforce_constraints_and_indexes.sql` para cada vendor.
+- SQLite V2 reconstrói as tabelas transacionalmente, copia todas as colunas e
+  preserva IDs para materializar FKs, `CHECK`, tamanhos, unicidades e índices.
+- PostgreSQL V2 usa `ALTER TABLE`, constraints nomeadas e índices próprios;
+  essa variante foi validada por inspeção e empacotamento, não por execução.
+- Habilitado `PRAGMA foreign_keys=ON` em cada conexão SQLite.
+- Criado um dialect SQLite mínimo que mantém o comportamento comunitário e
+  corrige somente a equivalência `INTEGER`/`BIGINT` usada pelo Hibernate
+  `validate` para chaves `IDENTITY Long`. IDs e schema PostgreSQL não mudaram.
+
+### Baseline do banco existente
+
+- O `estoque.db` original foi inspecionado em modo de leitura e não foi migrado.
+- Criado `beforeBaseline__verify_legacy_schema.sql`, que valida estrutura,
+  índices, unicidades, conteúdo, limites, enums, estados e órfãos antes de V1.
+- A baseline permanece opt-in por `FLYWAY_BASELINE_ON_MIGRATE=true` e fixa V1
+  como fronteira; uma incompatibilidade impede até a criação do histórico.
+- Em cópia do legado, V1 foi registrada como `BASELINE`, V2 foi aplicada e as
+  contagens 3/3/3/0/0 e os hashes canônicos de todas as linhas permaneceram
+  idênticos. O banco original conservou o SHA-256
+  `8C212EFB93F67878A16F4997D2EDED7EC31DFB50388EEDDB40D9B9C24F42A96B`.
+
+### Seed, testes e documentação
+
+- Removido o `data.sql` automático. Os nove dados de demonstração foram movidos
+  para um callback idempotente habilitado somente com `sqlite,sqlite-seed`.
+- Confirmado que produção/profile padrão não carrega dados fictícios.
+- `mvn clean verify` passou com 13 testes, JaCoCo, PMD e CPD.
+- O smoke final aplicou V1/V2, iniciou e reiniciou o JAR, manteve health `UP`,
+  OpenAPI/Swagger 200, resposta válida 201, erro sanitizado 400 e zero
+  duplicidades.
+- Hibernate `validate` encerrou com código 1 diante de uma coluna deliberadamente
+  incompatível em banco temporário.
+- Atualizados README, Docker/ambiente, smoke test e criado
+  `FLYWAY_MIGRATIONS.md` com comandos e limitações.
+- Nenhuma regra de negócio, autenticação, paginação, frontend ou arquitetura foi
+  alterada.
+
 ## [Não lançado] — 2026-08-05 — Confiança e reprodutibilidade
 
 ### Retificação histórica do smoke test

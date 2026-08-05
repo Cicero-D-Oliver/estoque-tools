@@ -1,6 +1,6 @@
 # Relatório de cobertura de testes
 
-Data da execução: 2026-08-04
+Data da execução: 2026-08-05
 
 ## Resultado da suíte
 
@@ -22,11 +22,11 @@ mvn clean verify
 
 | Métrica | Coberto | Total | Cobertura |
 |---|---:|---:|---:|
-| Linhas | 466 | 500 | **93,20%** |
-| Instruções | 2.229 | 2.473 | **90,13%** |
-| Métodos | 123 | 138 | **89,13%** |
-| Branches | 55 | 86 | **63,95%** |
-| Complexidade | 137 | 181 | **75,69%** |
+| Linhas | 470 | 504 | **93,25%** |
+| Instruções | 2.259 | 2.506 | **90,14%** |
+| Métodos | 126 | 141 | **89,36%** |
+| Branches | 63 | 98 | **64,29%** |
+| Complexidade | 143 | 190 | **75,26%** |
 
 Código criado automaticamente pelo Lombok foi marcado como gerado e não entra
 nas métricas. Assim, o relatório mede a lógica escrita no projeto em vez de
@@ -36,7 +36,7 @@ getters, setters, builders, `equals` e `hashCode` gerados automaticamente.
 
 | Camada | Linhas | Cobertura de linhas | Métodos | Cobertura de métodos | Branches |
 |---|---:|---:|---:|---:|---:|
-| Configuração e hardening HTTP | 61/61 | **100,00%** | 14/14 | **100,00%** | 3/4 — **75,00%** |
+| Configuração, hardening HTTP e dialect SQLite | 65/65 | **100,00%** | 17/17 | **100,00%** | 11/16 — **68,75%** |
 | Controllers | 32/34 | **94,12%** | 29/31 | **93,55%** | sem branches |
 | Services | 304/323 | **94,12%** | 53/58 | **91,38%** | 50/78 — **64,10%** |
 | Exceções e handler global | 39/49 | **79,59%** | 16/23 | **69,57%** | 2/4 — **50,00%** |
@@ -51,8 +51,8 @@ camadas separadas na tabela.
 ## Cenários automatizados
 
 Os testes usam `MockMvc` e atravessam controller, validação, service,
-repository e persistência SQLite. Cada caso roda em transação revertida ao
-final.
+repository e persistência SQLite criada pelas migrações Flyway. O Hibernate
+valida o schema antes da suíte; cada caso roda em transação revertida ao final.
 
 1. CRUD completo de usuário, incluindo atualização, consulta e inativação.
 2. Validação uniforme, e-mail duplicado e recurso inexistente.
