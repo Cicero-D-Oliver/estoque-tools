@@ -4,6 +4,18 @@ Todas as alterações relevantes são documentadas neste arquivo.
 
 ## [Não lançado] — 2026-08-05 — Migrações Flyway
 
+### CI e documentação da suíte atual
+
+- Atualizada a documentação operacional para a suíte atual de 24 testes,
+  preservando como históricos os registros das etapas que tinham 13 testes.
+- Removida da CI a igualdade rígida com 13 testes. O workflow agora exige no
+  mínimo o baseline atual de 24, permite crescimento da suíte e confirma as
+  três classes esperadas, relatórios Surefire, zero falhas, zero erros e zero
+  ignorados.
+- Mantidas as etapas Java 17, `mvn clean verify`, JaCoCo, PMD, CPD, smoke test
+  SQLite isolado e publicação apenas dos relatórios de qualidade como artefato.
+- Nenhum deploy, publicação de aplicação ou secret foi adicionado.
+
 ### Correção da auditoria P1 do baseline SQLite
 
 - Criada a branch `fix/sqlite-baseline-signature` a partir de
@@ -79,7 +91,8 @@ Todas as alterações relevantes são documentadas neste arquivo.
 - Removido o `data.sql` automático. Os nove dados de demonstração foram movidos
   para um callback idempotente habilitado somente com `sqlite,sqlite-seed`.
 - Confirmado que produção/profile padrão não carrega dados fictícios.
-- `mvn clean verify` passou com 13 testes, JaCoCo, PMD e CPD.
+- Na implementação inicial das migrações, `mvn clean verify` passou com os 13
+  testes existentes naquela etapa, além de JaCoCo, PMD e CPD.
 - O smoke final aplicou V1/V2, iniciou e reiniciou o JAR, manteve health `UP`,
   OpenAPI/Swagger 200, resposta válida 201, erro sanitizado 400 e zero
   duplicidades.
@@ -121,7 +134,9 @@ Todas as alterações relevantes são documentadas neste arquivo.
 
 - Ampliado `.gitignore` para certificados, chaves, diretórios de segredos e configurações locais.
 - Adicionada pipeline GitHub Actions em `.github/workflows/ci.yml` com Java 17 e cache Maven.
-- A pipeline executa `mvn clean verify`, exige exatamente 13 testes, valida JaCoCo/PMD/CPD e executa o smoke test SQLite isolado.
+- A versão inicial da pipeline executava `mvn clean verify` e exigia exatamente
+  os 13 testes existentes naquele momento. Essa trava histórica foi substituída
+  posteriormente pela validação expansível da suíte atual.
 - PMD 3.28.0 passou a integrar a fase `verify`; CPD gera relatório sem transformar as duas duplicações pequenas já aceitas em falha.
 - Não foram adicionados deploy, publicação ou secrets de produção.
 
@@ -214,13 +229,15 @@ Todas as alterações relevantes são documentadas neste arquivo.
 - Criados scripts POSIX equivalentes para Linux e macOS.
 - Centralizada a lógica por plataforma para reduzir duplicação.
 - Corrigida a passagem de um único argumento do PowerShell ao Maven.
-- Script Windows de testes validado com 13 testes; scripts Unix validados com `sh -n`.
+- Na Etapa 5, o script Windows foi validado com os 13 testes então existentes;
+  os scripts Unix foram validados com `sh -n`.
 
 ### Testes
 
 - Adicionados 7 testes de integração de hardening aos 6 fluxos existentes.
 - Cobertos erro sanitizado, correlação, JSON desconhecido, ID inválido, CORS, registros inativos, quantidade zero, correção inconsistente, healthcheck e OpenAPI.
-- Total atual: 13 testes, sem falhas ou erros.
+- Total naquela etapa: 13 testes, sem falhas ou erros. O estado atual posterior
+  possui 24 testes e está registrado nas seções mais recentes deste changelog.
 - Atualizado `COVERAGE_REPORT.md` com os números finais.
 
 ### Documentação e Git

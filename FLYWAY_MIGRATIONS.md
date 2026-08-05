@@ -197,8 +197,10 @@ nenhuma instância legada foi disponibilizada nesta tarefa.
   SHA-256 `39518586FF1C96B163DD3855CB5DEA54A97CBC56200DF606B6A06B70B06FB718`.
 - Backup isolado do banco:
   `estoque-pre-flyway-20260805-121308.db`, mesmo tamanho e SHA-256 do original.
-- `mvn clean verify`: sucesso; 13 testes, 0 falhas, 0 erros; JaCoCo, PMD e CPD
-  gerados.
+- Execução inicial da implementação Flyway: `mvn clean verify` com 13 testes,
+  0 falhas e 0 erros.
+- Revalidação atual após a assinatura integral do baseline: `mvn clean verify`
+  com 24 testes, 0 falhas, 0 erros e 0 ignorados; JaCoCo, PMD e CPD gerados.
 - SQLite vazio: V1 e V2 aplicadas; Hibernate `validate` concluído.
 - Smoke final: duas inicializações, health `UP`, OpenAPI 200, Swagger 200,
   requisição 201, rejeição sanitizada 400, sem duplicidade.

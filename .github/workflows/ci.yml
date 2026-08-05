@@ -27,21 +27,52 @@ jobs:
       - name: Build, testes, JaCoCo, PMD e CPD
         run: mvn --batch-mode --no-transfer-progress clean verify
 
-      - name: Confirmar 13 testes e relatórios
+      - name: Validar suíte atual e relatórios
         shell: pwsh
         run: |
           $reports = Get-ChildItem -LiteralPath "target/surefire-reports" -Filter "TEST-*.xml"
+          if ($reports.Count -eq 0) {
+            throw "Nenhum relatório Surefire foi encontrado."
+          }
+
+          $expectedSuites = @(
+            "com.equipe.estoque.ApplicationFlowIntegrationTest",
+            "com.equipe.estoque.HardeningIntegrationTest",
+            "com.equipe.estoque.config.SQLiteLegacyBaselineCallbackTest"
+          )
+          $minimumTests = 24
           $total = 0
+          $executedSuites = @()
           foreach ($report in $reports) {
             [xml]$xml = Get-Content -LiteralPath $report.FullName
-            $total += [int]$xml.testsuite.tests
-            if ([int]$xml.testsuite.failures -ne 0 -or [int]$xml.testsuite.errors -ne 0) {
-              throw "A suíte contém falhas ou erros."
+            $suite = $xml.testsuite
+            $suiteTests = [int]$suite.tests
+            if ($suiteTests -le 0) {
+              throw "A suíte $($suite.name) não executou testes."
+            }
+            if ([int]$suite.failures -ne 0) {
+              throw "A suíte $($suite.name) contém falhas."
+            }
+            if ([int]$suite.errors -ne 0) {
+              throw "A suíte $($suite.name) contém erros."
+            }
+            if ([int]$suite.skipped -ne 0) {
+              throw "A suíte $($suite.name) contém testes ignorados inesperados."
+            }
+            $total += $suiteTests
+            $executedSuites += [string]$suite.name
+          }
+
+          foreach ($expectedSuite in $expectedSuites) {
+            if ($executedSuites -notcontains $expectedSuite) {
+              throw "Suíte obrigatória não executada: $expectedSuite"
             }
           }
-          if ($total -ne 13) {
-            throw "Quantidade inesperada de testes: $total; esperado: 13."
+          if ($total -lt $minimumTests) {
+            throw "Regressão na quantidade de testes: $total; mínimo esperado: $minimumTests."
           }
+
+          Write-Host "Suítes obrigatórias executadas sem falhas, erros ou ignorados: $total testes."
           @(
             "target/site/jacoco/jacoco.xml",
             "target/pmd.xml",

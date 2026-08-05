@@ -250,7 +250,10 @@ chmod +x scripts/linux-macos/*.sh
 mvn clean verify
 ```
 
-A suíte contém 13 testes de integração que atravessam HTTP, validação, services, repositories e SQLite. Ela cobre os fluxos principais e cenários de hardening, incluindo CORS, JSON inválido, dados desconhecidos, registros inativos e documentação OpenAPI.
+A suíte contém atualmente 24 testes. Eles atravessam HTTP, validação, services,
+repositories e SQLite, além de exercitar migrações Flyway, assinatura integral
+do baseline, rejeição de schemas legados incompatíveis e registro do callback
+na configuração Spring.
 
 Relatórios gerados:
 
@@ -275,7 +278,13 @@ Use `-KeepArtifacts` somente para diagnóstico local; o comportamento padrão é
 
 ### Integração contínua
 
-A pipeline `.github/workflows/ci.yml` usa Java 17 e cache Maven. Em pushes e pull requests ela executa `mvn clean verify`, exige exatamente 13 testes, verifica os relatórios JaCoCo/PMD/CPD, roda o smoke test isolado e preserva os relatórios como artefato da execução. Não há publicação, deploy ou secrets de produção.
+A pipeline `.github/workflows/ci.yml` usa Java 17 e cache Maven. Em pushes e
+pull requests ela executa `mvn clean verify`, exige no mínimo os 24 testes do
+baseline atual e confirma a execução das três classes de teste esperadas. O
+workflow rejeita falhas, erros, testes ignorados ou relatórios Surefire
+ausentes, mas permite que novos testes aumentem o total sem exigir manutenção
+da contagem. JaCoCo, PMD, CPD e o smoke test SQLite isolado continuam
+obrigatórios. Não há publicação, deploy ou secrets de produção.
 
 ## Contrato HTTP e erros
 

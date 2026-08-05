@@ -3,15 +3,24 @@
 Data: 2026-08-04
 Escopo: todo o código-fonte, configurações, testes, scripts e documentação do projeto.
 
+Atualização de evidência: 2026-08-05, após Flyway e assinatura integral do
+baseline SQLite.
+
 ## Resumo executivo
 
-O projeto mantém uma arquitetura em camadas pequena e compreensível. Após as melhorias conservadoras, o build compila sem avisos do `javac`, os 13 testes passam e o PMD não encontrou violações no conjunto padrão. Não foram identificadas dependências circulares, TODOs esquecidos ou imports mortos.
+O projeto mantém uma arquitetura em camadas pequena e compreensível. Na revisão
+original, os 13 testes então existentes passaram. Na revalidação atual, os 24
+testes passam, o build compila sem avisos do `javac` e o PMD não encontra
+violações no conjunto padrão. Não foram identificadas dependências circulares,
+TODOs esquecidos ou imports mortos.
 
 Os dois services de domínio continuam sendo as maiores classes. Essa concentração é conhecida e coerente com a arquitetura original, mas deve ser reavaliada se os fluxos crescerem. Não foi feita divisão de services nem criação de nova camada de mapeamento para respeitar a restrição de não alterar a arquitetura.
 
 ## Método e evidências
 
-- Leitura integral dos 43 arquivos Java de produção, 2 testes, 4 configurações de recursos e documentos do repositório.
+- A revisão original abrangeu 43 arquivos Java de produção e 2 classes de
+  teste. O estado atual possui 3 classes de teste e foi revalidado integralmente
+  pelo build.
 - Build com Java 17, `-parameters` e `-Xlint:all,-processing`.
 - PMD 7.17.0 via Maven PMD Plugin 3.28.0.
 - CPD para duplicação.
@@ -23,7 +32,8 @@ Resultados objetivos:
 
 | Verificação | Resultado |
 |---|---|
-| Testes | 13 executados, 0 falhas, 0 erros |
+| Testes na revisão original | 13 executados, 0 falhas, 0 erros |
+| Testes na revalidação atual | 24 executados, 0 falhas, 0 erros, 0 ignorados |
 | PMD | 0 violações |
 | Dependências duplicadas no POM | 0 |
 | Duplicações CPD | 2 blocos pequenos de mapeamento DTO |

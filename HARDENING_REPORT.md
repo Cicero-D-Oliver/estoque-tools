@@ -6,7 +6,11 @@ Revisão da evidência de smoke test: 2026-08-05
 
 ## Resultado
 
-O backend foi endurecido sem implementar autenticação e sem alterar a arquitetura em camadas. O projeto compila, inicia com SQLite, publica healthcheck/Swagger, executa 13 testes sem falhas e não apresenta avisos do compilador ou violações PMD.
+O backend foi endurecido sem implementar autenticação e sem alterar a
+arquitetura em camadas. Na execução original desta etapa existiam 13 testes. O
+estado atual, após Flyway e o reforço da assinatura de baseline SQLite, executa
+24 testes sem falhas, inicia com SQLite, publica healthcheck/Swagger e não
+apresenta avisos do compilador ou violações PMD.
 
 ## Segurança
 
@@ -123,7 +127,8 @@ Limitação de validação: Docker não está instalado na máquina de execuçã
 - Windows PowerShell: executar, testar, limpar, buildar e gerar cobertura.
 - Linux/macOS POSIX shell: as mesmas cinco tarefas.
 - Lógica centralizada por plataforma para evitar duplicação.
-- Script Windows de testes executado com sucesso: 13/13.
+- Execução histórica da Etapa 5: script Windows aprovado com 13/13 testes.
+- Revalidação atual após Flyway: `mvn clean verify` aprovado com 24/24 testes.
 - Smoke test PowerShell reproduzível usa `SQLITE_URL`, banco temporário exclusivo, duas inicializações e verificação do banco de desenvolvimento.
 - Todos os scripts shell passaram em `sh -n`.
 - A política PowerShell local bloqueia scripts sem opção; o README usa `-ExecutionPolicy Bypass` apenas na chamada, sem alteração permanente.
@@ -153,8 +158,9 @@ Limitação de validação: Docker não está instalado na máquina de execuçã
 | Validação | Resultado |
 |---|---|
 | `mvn clean verify` | sucesso |
-| Testes de integração | 13/13 |
-| Cobertura JaCoCo (execução após Flyway) | 93,25% linhas; 90,14% instruções; 64,29% branches |
+| Testes na execução original da Etapa 5 | 13/13 |
+| Testes na revalidação atual após Flyway | 24/24 |
+| Cobertura JaCoCo atual | 91,97% linhas; 89,32% instruções; 70,76% branches |
 | Smoke test original de 2026-08-04 | JAR iniciou, mas o isolamento alegado era inválido: foi usada `DB_URL`, ignorada pelo profile SQLite, e `estoque.db` foi atualizado |
 | Smoke test corrigido de 2026-08-05 | sucesso em banco exclusivo via `SQLITE_URL`, com duas inicializações e remoção após o teste |
 | Banco isolado comprovado | `target/smoke-test/7c4a143bf2e24f16a78c7537ac7c4871/smoke.db`, SHA-256 `83321B4FFE61FE92A546B0ED1AEC8DF8776DD85F3FBF89835FC01B723491B521` |
