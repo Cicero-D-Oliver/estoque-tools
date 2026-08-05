@@ -1,0 +1,13 @@
+target
+.git
+.idea
+.vscode
+*.iml
+*.db
+*.db-*
+.env
+*.log
+README.md
+CHANGELOG.md
+COVERAGE_REPORT.md
+ROTEIRO_TESTES_MANUAIS.md

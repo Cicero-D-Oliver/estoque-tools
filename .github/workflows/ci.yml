@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Build, testes e qualidade
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configurar Java 17 e cache Maven
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build, testes, JaCoCo, PMD e CPD
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Confirmar 13 testes e relatórios
+        shell: pwsh
+        run: |
+          $reports = Get-ChildItem -LiteralPath "target/surefire-reports" -Filter "TEST-*.xml"
+          $total = 0
+          foreach ($report in $reports) {
+            [xml]$xml = Get-Content -LiteralPath $report.FullName
+            $total += [int]$xml.testsuite.tests
+            if ([int]$xml.testsuite.failures -ne 0 -or [int]$xml.testsuite.errors -ne 0) {
+              throw "A suíte contém falhas ou erros."
+            }
+          }
+          if ($total -ne 13) {
+            throw "Quantidade inesperada de testes: $total; esperado: 13."
+          }
+          @(
+            "target/site/jacoco/jacoco.xml",
+            "target/pmd.xml",
+            "target/cpd.xml"
+          ) | ForEach-Object {
+            if (-not (Test-Path -LiteralPath $_ -PathType Leaf)) {
+              throw "Relatório obrigatório ausente: $_"
+            }
+          }
+
+      - name: Smoke test SQLite isolado
+        shell: pwsh
+        run: ./scripts/smoke-test.ps1 -JarPath "target/estoque-1.0.0.jar"
+
+      - name: Preservar relatórios de qualidade
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: quality-reports
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            target/surefire-reports/
+            target/site/jacoco/
+            target/pmd.xml
+            target/cpd.xml

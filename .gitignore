@@ -1,0 +1,34 @@
+# Build e cobertura
+target/
+
+# Bancos e arquivos locais
+*.db
+*.db-shm
+*.db-wal
+
+# Segredos e configuração local
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+application-local.properties
+application-*.local.properties
+
+# IDEs e sistema operacional
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+.DS_Store
+Thumbs.db
+
+# Logs e temporários
+*.log
+*.tmp
+*.swp
