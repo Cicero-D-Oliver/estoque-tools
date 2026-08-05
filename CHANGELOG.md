@@ -4,6 +4,37 @@ Todas as alterações relevantes são documentadas neste arquivo.
 
 ## [Não lançado] — 2026-08-05 — Migrações Flyway
 
+### Correção da auditoria P1 do baseline SQLite
+
+- Criada a branch `fix/sqlite-baseline-signature` a partir de
+  `feature/flyway-migrations` limpa no commit
+  `283f66960b687466570c6d60e044b846c98a4c6b`.
+- Preservados, antes da alteração, um arquivo completo do projeto e uma cópia
+  de `estoque.db`; os dois bancos tinham SHA-256
+  `8C212EFB93F67878A16F4997D2EDED7EC31DFB50388EEDDB40D9B9C24F42A96B`.
+- Corrigido o achado P1 segundo o qual a guarda SQL podia aceitar um schema
+  parcialmente compatível, por exemplo com índice composto ou objetos extras.
+- Adicionado `SQLiteLegacyBaselineCallback`, registrado somente quando o
+  driver configurado é SQLite. Ele calcula uma assinatura integral e exige o
+  SHA-256 canônico conhecido
+  `f8d17cb13b640a8fc723887749da512a7ba681feebedf3afb7136c254c5365d6`
+  antes de permitir a gravação da baseline V1.
+- A assinatura abrange DDL e catálogo de tabelas, colunas inclusive geradas,
+  tipos, nulabilidade, defaults, PKs, FKs, índices e suas colunas/collations,
+  unicidade, parcialidade, triggers, views, `STRICT` e `WITHOUT ROWID`.
+- A guarda SQL preexistente foi mantida sem relaxamento para validar conteúdo,
+  duplicidades, enums, limites, órfãos e compatibilidade dos dados com V2.
+- Criada uma fixture estrutural do legado conhecido e dez casos de teste do
+  baseline. Foram rejeitados índice composto, trigger, view, collation, ordem
+  de coluna, `STRICT` e `WITHOUT ROWID`; todos falharam sem criar o histórico.
+- O caminho Spring do JAR também foi verificado: uma cópia com trigger extra
+  encerrou com código 1 antes de `flyway_schema_history`, enquanto uma cópia
+  fiel recebeu baseline V1, V2 e passou no Hibernate `validate`.
+- A cópia fiel preservou as contagens 3/3/3/0/0 e os hashes canônicos de todas
+  as linhas. O `estoque.db` original não foi escrito.
+- `mvn clean verify` passou em Java 17 com 24 testes (os 13 anteriores e 11
+  novos), zero falhas/erros/ignorados, além de JaCoCo, PMD e CPD.
+
 ### Segurança e reprodutibilidade do schema
 
 - Criada a branch `feature/flyway-migrations` a partir do baseline Git limpo.
