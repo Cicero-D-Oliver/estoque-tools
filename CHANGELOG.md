@@ -2,6 +2,107 @@
 
 Todas as alterações relevantes são documentadas neste arquivo.
 
+## [Não lançado] — 2026-08-05 — Migrações Flyway
+
+### CI e documentação da suíte atual
+
+- Atualizada a documentação operacional para a suíte atual de 24 testes,
+  preservando como históricos os registros das etapas que tinham 13 testes.
+- Removida da CI a igualdade rígida com 13 testes. O workflow agora exige no
+  mínimo o baseline atual de 24, permite crescimento da suíte e confirma as
+  três classes esperadas, relatórios Surefire, zero falhas, zero erros e zero
+  ignorados.
+- Mantidas as etapas Java 17, `mvn clean verify`, JaCoCo, PMD, CPD, smoke test
+  SQLite isolado e publicação apenas dos relatórios de qualidade como artefato.
+- Nenhum deploy, publicação de aplicação ou secret foi adicionado.
+
+### Correção da auditoria P1 do baseline SQLite
+
+- Criada a branch `fix/sqlite-baseline-signature` a partir de
+  `feature/flyway-migrations` limpa no commit
+  `283f66960b687466570c6d60e044b846c98a4c6b`.
+- Preservados, antes da alteração, um arquivo completo do projeto e uma cópia
+  de `estoque.db`; os dois bancos tinham SHA-256
+  `8C212EFB93F67878A16F4997D2EDED7EC31DFB50388EEDDB40D9B9C24F42A96B`.
+- Corrigido o achado P1 segundo o qual a guarda SQL podia aceitar um schema
+  parcialmente compatível, por exemplo com índice composto ou objetos extras.
+- Adicionado `SQLiteLegacyBaselineCallback`, registrado somente quando o
+  driver configurado é SQLite. Ele calcula uma assinatura integral e exige o
+  SHA-256 canônico conhecido
+  `f8d17cb13b640a8fc723887749da512a7ba681feebedf3afb7136c254c5365d6`
+  antes de permitir a gravação da baseline V1.
+- A assinatura abrange DDL e catálogo de tabelas, colunas inclusive geradas,
+  tipos, nulabilidade, defaults, PKs, FKs, índices e suas colunas/collations,
+  unicidade, parcialidade, triggers, views, `STRICT` e `WITHOUT ROWID`.
+- A guarda SQL preexistente foi mantida sem relaxamento para validar conteúdo,
+  duplicidades, enums, limites, órfãos e compatibilidade dos dados com V2.
+- Criada uma fixture estrutural do legado conhecido e dez casos de teste do
+  baseline. Foram rejeitados índice composto, trigger, view, collation, ordem
+  de coluna, `STRICT` e `WITHOUT ROWID`; todos falharam sem criar o histórico.
+- O caminho Spring do JAR também foi verificado: uma cópia com trigger extra
+  encerrou com código 1 antes de `flyway_schema_history`, enquanto uma cópia
+  fiel recebeu baseline V1, V2 e passou no Hibernate `validate`.
+- A cópia fiel preservou as contagens 3/3/3/0/0 e os hashes canônicos de todas
+  as linhas. O `estoque.db` original não foi escrito.
+- `mvn clean verify` passou em Java 17 com 24 testes (os 13 anteriores e 11
+  novos), zero falhas/erros/ignorados, além de JaCoCo, PMD e CPD.
+
+### Segurança e reprodutibilidade do schema
+
+- Criada a branch `feature/flyway-migrations` a partir do baseline Git limpo.
+- Gerados e validados backups adicionais do projeto inteiro e de `estoque.db`
+  antes de qualquer alteração.
+- Adicionados `flyway-core` e o módulo PostgreSQL na versão 11.7.2 gerenciada
+  pelo Spring Boot 3.5.16.
+- Substituído `ddl-auto=update`/`create-drop` por `ddl-auto=validate` nos profiles
+  SQLite, PostgreSQL e de testes.
+- Desabilitados a inicialização automática por `data.sql`, o baseline automático
+  e o `clean` do Flyway.
+- Separadas migrações SQLite e PostgreSQL porque identidade, constraints,
+  afinidade de tipos e evolução de tabelas não são portáveis entre os vendors.
+
+### Migrações
+
+- Criadas `V1__create_initial_schema.sql` e
+  `V2__enforce_constraints_and_indexes.sql` para cada vendor.
+- SQLite V2 reconstrói as tabelas transacionalmente, copia todas as colunas e
+  preserva IDs para materializar FKs, `CHECK`, tamanhos, unicidades e índices.
+- PostgreSQL V2 usa `ALTER TABLE`, constraints nomeadas e índices próprios;
+  essa variante foi validada por inspeção e empacotamento, não por execução.
+- Habilitado `PRAGMA foreign_keys=ON` em cada conexão SQLite.
+- Criado um dialect SQLite mínimo que mantém o comportamento comunitário e
+  corrige somente a equivalência `INTEGER`/`BIGINT` usada pelo Hibernate
+  `validate` para chaves `IDENTITY Long`. IDs e schema PostgreSQL não mudaram.
+
+### Baseline do banco existente
+
+- O `estoque.db` original foi inspecionado em modo de leitura e não foi migrado.
+- Criado `beforeBaseline__verify_legacy_schema.sql`, que valida estrutura,
+  índices, unicidades, conteúdo, limites, enums, estados e órfãos antes de V1.
+- A baseline permanece opt-in por `FLYWAY_BASELINE_ON_MIGRATE=true` e fixa V1
+  como fronteira; uma incompatibilidade impede até a criação do histórico.
+- Em cópia do legado, V1 foi registrada como `BASELINE`, V2 foi aplicada e as
+  contagens 3/3/3/0/0 e os hashes canônicos de todas as linhas permaneceram
+  idênticos. O banco original conservou o SHA-256
+  `8C212EFB93F67878A16F4997D2EDED7EC31DFB50388EEDDB40D9B9C24F42A96B`.
+
+### Seed, testes e documentação
+
+- Removido o `data.sql` automático. Os nove dados de demonstração foram movidos
+  para um callback idempotente habilitado somente com `sqlite,sqlite-seed`.
+- Confirmado que produção/profile padrão não carrega dados fictícios.
+- Na implementação inicial das migrações, `mvn clean verify` passou com os 13
+  testes existentes naquela etapa, além de JaCoCo, PMD e CPD.
+- O smoke final aplicou V1/V2, iniciou e reiniciou o JAR, manteve health `UP`,
+  OpenAPI/Swagger 200, resposta válida 201, erro sanitizado 400 e zero
+  duplicidades.
+- Hibernate `validate` encerrou com código 1 diante de uma coluna deliberadamente
+  incompatível em banco temporário.
+- Atualizados README, Docker/ambiente, smoke test e criado
+  `FLYWAY_MIGRATIONS.md` com comandos e limitações.
+- Nenhuma regra de negócio, autenticação, paginação, frontend ou arquitetura foi
+  alterada.
+
 ## [Não lançado] — 2026-08-05 — Confiança e reprodutibilidade
 
 ### Retificação histórica do smoke test
@@ -33,7 +134,9 @@ Todas as alterações relevantes são documentadas neste arquivo.
 
 - Ampliado `.gitignore` para certificados, chaves, diretórios de segredos e configurações locais.
 - Adicionada pipeline GitHub Actions em `.github/workflows/ci.yml` com Java 17 e cache Maven.
-- A pipeline executa `mvn clean verify`, exige exatamente 13 testes, valida JaCoCo/PMD/CPD e executa o smoke test SQLite isolado.
+- A versão inicial da pipeline executava `mvn clean verify` e exigia exatamente
+  os 13 testes existentes naquele momento. Essa trava histórica foi substituída
+  posteriormente pela validação expansível da suíte atual.
 - PMD 3.28.0 passou a integrar a fase `verify`; CPD gera relatório sem transformar as duas duplicações pequenas já aceitas em falha.
 - Não foram adicionados deploy, publicação ou secrets de produção.
 
@@ -126,13 +229,15 @@ Todas as alterações relevantes são documentadas neste arquivo.
 - Criados scripts POSIX equivalentes para Linux e macOS.
 - Centralizada a lógica por plataforma para reduzir duplicação.
 - Corrigida a passagem de um único argumento do PowerShell ao Maven.
-- Script Windows de testes validado com 13 testes; scripts Unix validados com `sh -n`.
+- Na Etapa 5, o script Windows foi validado com os 13 testes então existentes;
+  os scripts Unix foram validados com `sh -n`.
 
 ### Testes
 
 - Adicionados 7 testes de integração de hardening aos 6 fluxos existentes.
 - Cobertos erro sanitizado, correlação, JSON desconhecido, ID inválido, CORS, registros inativos, quantidade zero, correção inconsistente, healthcheck e OpenAPI.
-- Total atual: 13 testes, sem falhas ou erros.
+- Total naquela etapa: 13 testes, sem falhas ou erros. O estado atual posterior
+  possui 24 testes e está registrado nas seções mais recentes deste changelog.
 - Atualizado `COVERAGE_REPORT.md` com os números finais.
 
 ### Documentação e Git

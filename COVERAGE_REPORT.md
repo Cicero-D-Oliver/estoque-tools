@@ -1,15 +1,15 @@
 # Relatório de cobertura de testes
 
-Data da execução: 2026-08-04
+Data da execução: 2026-08-05
 
 ## Resultado da suíte
 
-- Testes executados: **13**
+- Testes executados: **24**
 - Falhas: **0**
 - Erros: **0**
 - Ignorados: **0**
 - Resultado do build: **sucesso**
-- Java utilizado: **17.0.20**
+- Java utilizado: **17.0.9**
 - Ferramenta de cobertura: **JaCoCo 0.8.12**
 
 Comando utilizado:
@@ -22,11 +22,11 @@ mvn clean verify
 
 | Métrica | Coberto | Total | Cobertura |
 |---|---:|---:|---:|
-| Linhas | 466 | 500 | **93,20%** |
-| Instruções | 2.229 | 2.473 | **90,13%** |
-| Métodos | 123 | 138 | **89,13%** |
-| Branches | 55 | 86 | **63,95%** |
-| Complexidade | 137 | 181 | **75,69%** |
+| Linhas | 607 | 660 | **91,97%** |
+| Instruções | 2.895 | 3.241 | **89,32%** |
+| Métodos | 147 | 163 | **90,18%** |
+| Branches | 121 | 171 | **70,76%** |
+| Complexidade | 186 | 249 | **74,70%** |
 
 Código criado automaticamente pelo Lombok foi marcado como gerado e não entra
 nas métricas. Assim, o relatório mede a lógica escrita no projeto em vez de
@@ -36,7 +36,7 @@ getters, setters, builders, `equals` e `hashCode` gerados automaticamente.
 
 | Camada | Linhas | Cobertura de linhas | Métodos | Cobertura de métodos | Branches |
 |---|---:|---:|---:|---:|---:|
-| Configuração e hardening HTTP | 61/61 | **100,00%** | 14/14 | **100,00%** | 3/4 — **75,00%** |
+| Configuração, hardening HTTP, dialect e baseline SQLite | 202/221 | **91,40%** | 38/39 | **97,44%** | 69/89 — **77,53%** |
 | Controllers | 32/34 | **94,12%** | 29/31 | **93,55%** | sem branches |
 | Services | 304/323 | **94,12%** | 53/58 | **91,38%** | 50/78 — **64,10%** |
 | Exceções e handler global | 39/49 | **79,59%** | 16/23 | **69,57%** | 2/4 — **50,00%** |
@@ -50,9 +50,11 @@ camadas separadas na tabela.
 
 ## Cenários automatizados
 
-Os testes usam `MockMvc` e atravessam controller, validação, service,
-repository e persistência SQLite. Cada caso roda em transação revertida ao
-final.
+Os testes de aplicação usam `MockMvc` e atravessam controller, validação,
+service, repository e persistência SQLite criada pelas migrações Flyway. Os
+testes de baseline usam bancos temporários exclusivos e invocam Flyway
+diretamente. O Hibernate valida o schema antes da suíte de aplicação; os casos
+HTTP rodam em transação revertida ao final.
 
 1. CRUD completo de usuário, incluindo atualização, consulta e inativação.
 2. Validação uniforme, e-mail duplicado e recurso inexistente.
@@ -67,6 +69,17 @@ final.
 11. Rejeição de quantidade zero sem criação de histórico.
 12. Bloqueio de correção direta para o estado `EMPRESTADA`.
 13. Healthcheck e contrato OpenAPI, incluindo tags, rotas e schema de erro.
+14. Correspondência exata da fixture com a assinatura canônica aceita.
+15. Baseline do legado conhecido, aplicação de V2 e preservação de hashes.
+16. Rejeição de índice composto incompatível antes do histórico Flyway.
+17. Rejeição de trigger adicional antes do histórico Flyway.
+18. Rejeição de view adicional antes do histórico Flyway.
+19. Rejeição de collation divergente antes do histórico Flyway.
+20. Rejeição de ordem de coluna divergente antes do histórico Flyway.
+21. Rejeição de tabela adicional `STRICT`.
+22. Rejeição de tabela adicional `WITHOUT ROWID`.
+23. Aplicação normal de V1 e V2 em banco SQLite novo e vazio.
+24. Registro do callback de assinatura integral na configuração Flyway Spring.
 
 ## Principais lacunas restantes
 

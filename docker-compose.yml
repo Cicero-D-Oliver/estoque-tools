@@ -30,7 +30,6 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-estoque_db}
       DB_USERNAME: ${POSTGRES_USER:-estoque}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}
-      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
       LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT:-INFO}
       LOG_LEVEL_APP: ${LOG_LEVEL_APP:-INFO}

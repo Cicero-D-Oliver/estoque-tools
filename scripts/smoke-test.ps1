@@ -173,8 +173,6 @@ function Start-SmokeBackend {
     $processEnvironment = @{
         SERVER_PORT = [string]$port
         SQLITE_URL = $sqliteUrl
-        SQL_INIT_MODE = "always"
-        JPA_DDL_AUTO = "update"
     }
     $previousEnvironment = @{}
     foreach ($entry in $processEnvironment.GetEnumerator()) {

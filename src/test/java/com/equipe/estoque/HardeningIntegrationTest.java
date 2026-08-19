@@ -1,7 +1,9 @@
 package com.equipe.estoque;
 
+import com.equipe.estoque.config.SQLiteLegacyBaselineCallback;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -12,10 +14,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Map;
 
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.blankOrNullString;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -35,6 +39,15 @@ class HardeningIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private Flyway flyway;
+
+    @Test
+    void deveRegistrarAssinaturaIntegralNoFlywaySQLite() {
+        assertTrue(Arrays.stream(flyway.getConfiguration().getCallbacks())
+                .anyMatch(SQLiteLegacyBaselineCallback.class::isInstance));
+    }
 
     @Test
     void deveSanitizarJsonMalformadoSemExporDetalhesInternos() throws Exception {

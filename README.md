@@ -14,6 +14,7 @@ Backend REST para controlar usuários internos, itens consumíveis, ferramentas 
 - Validação de entrada, tratamento uniforme de erros e correlação de logs.
 - Swagger UI, OpenAPI 3.1 e healthcheck operacional.
 - Perfis separados para SQLite e PostgreSQL.
+- Schema versionado por Flyway e validado pelo Hibernate.
 
 ## Arquitetura
 
@@ -48,6 +49,7 @@ flowchart LR
 | Springdoc OpenAPI | 2.8.17 |
 | PostgreSQL JDBC | gerenciado pelo Spring Boot |
 | SQLite JDBC | 3.53.1.0 |
+| Flyway | 11.7.2, gerenciado pelo Spring Boot |
 | JaCoCo | 0.8.12 |
 | Maven | 3.9 ou superior |
 
@@ -73,13 +75,26 @@ docker compose version
 
 ## Instalação e execução rápida com SQLite
 
-O perfil padrão é `sqlite`; não é necessário instalar servidor de banco.
+O perfil padrão é `sqlite`; não é necessário instalar servidor de banco. Em um
+clone novo, no qual `estoque.db` ainda não existe, Flyway cria integralmente o
+schema e o Hibernate o valida:
 
 ```bash
 mvn clean spring-boot:run
 ```
 
-Na primeira inicialização, o arquivo `estoque.db` e os dados de demonstração são criados. A carga é idempotente e pode ser executada novamente com segurança.
+Na primeira inicialização, o arquivo `estoque.db` é criado sem dados fictícios.
+Para carregar opcionalmente os nove registros de demonstração, ative os profiles
+`sqlite,sqlite-seed`; o callback é idempotente e executa depois das migrações.
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE='sqlite,sqlite-seed'
+mvn spring-boot:run
+```
+
+Se o arquivo já existia antes da adoção do Flyway, a inicialização padrão falha
+por segurança. Faça backup e siga a baseline verificada descrita em
+[FLYWAY_MIGRATIONS.md](FLYWAY_MIGRATIONS.md); não habilite baseline às cegas.
 
 Endereços:
 
@@ -128,7 +143,9 @@ export DB_PASSWORD='sua-senha-local'
 mvn spring-boot:run
 ```
 
-O Hibernate usa `update` para facilitar o desenvolvimento. Antes de produção, adote migrações versionadas e execute com `JPA_DDL_AUTO=validate`.
+Flyway aplica as migrações PostgreSQL próprias e o Hibernate usa `validate`.
+Um PostgreSQL existente exige comparação real com V1 antes de qualquer baseline;
+a baseline automática fica desabilitada.
 
 ## Docker com PostgreSQL
 
@@ -181,8 +198,7 @@ O banco fica no volume `estoque_postgres_data`. `docker compose down -v` também
 | `DB_URL` | `jdbc:postgresql://localhost:5432/estoque_db` | conexão PostgreSQL |
 | `DB_USERNAME` | `estoque` | usuário PostgreSQL |
 | `DB_PASSWORD` | sem padrão | senha PostgreSQL obrigatória |
-| `JPA_DDL_AUTO` | `update` | estratégia de schema; produção deve usar `validate` após migrações |
-| `SQL_INIT_MODE` | `always` no SQLite; `never` no PostgreSQL | execução de `data.sql` |
+| `FLYWAY_BASELINE_ON_MIGRATE` | `false` | opt-in exclusivo para incorporar SQLite legado já verificado |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | origens web permitidas, separadas por vírgula |
 | `CORS_ALLOWED_METHODS` | `GET,POST,PUT,DELETE,OPTIONS` | métodos CORS |
 | `CORS_ALLOWED_HEADERS` | `Content-Type,Accept,X-Correlation-Id` | cabeçalhos CORS |
@@ -234,7 +250,10 @@ chmod +x scripts/linux-macos/*.sh
 mvn clean verify
 ```
 
-A suíte contém 13 testes de integração que atravessam HTTP, validação, services, repositories e SQLite. Ela cobre os fluxos principais e cenários de hardening, incluindo CORS, JSON inválido, dados desconhecidos, registros inativos e documentação OpenAPI.
+A suíte contém atualmente 24 testes. Eles atravessam HTTP, validação, services,
+repositories e SQLite, além de exercitar migrações Flyway, assinatura integral
+do baseline, rejeição de schemas legados incompatíveis e registro do callback
+na configuração Spring.
 
 Relatórios gerados:
 
@@ -253,13 +272,19 @@ Depois de gerar o JAR com `mvn clean verify`, execute:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
 ```
 
-O script usa `SQLITE_URL` para criar um banco exclusivo em `target/smoke-test/<UUID>/smoke.db`. Ele inicia o JAR duas vezes sobre o mesmo arquivo, valida healthcheck, OpenAPI, Swagger, requisições válida/inválida e ausência de duplicidades. O banco temporário é removido no final, e o teste falha se tamanho, timestamp ou SHA-256 de `estoque.db` mudarem.
+O script usa `SQLITE_URL` para criar um banco exclusivo em `target/smoke-test/<UUID>/smoke.db`. Ele aplica Flyway, inicia o JAR duas vezes sobre o mesmo arquivo, valida healthcheck, OpenAPI, Swagger, requisições válida/inválida e ausência de duplicidades. O banco temporário é removido no final, e o teste falha se tamanho, timestamp ou SHA-256 de `estoque.db` mudarem.
 
 Use `-KeepArtifacts` somente para diagnóstico local; o comportamento padrão é remover o banco isolado.
 
 ### Integração contínua
 
-A pipeline `.github/workflows/ci.yml` usa Java 17 e cache Maven. Em pushes e pull requests ela executa `mvn clean verify`, exige exatamente 13 testes, verifica os relatórios JaCoCo/PMD/CPD, roda o smoke test isolado e preserva os relatórios como artefato da execução. Não há publicação, deploy ou secrets de produção.
+A pipeline `.github/workflows/ci.yml` usa Java 17 e cache Maven. Em pushes e
+pull requests ela executa `mvn clean verify`, exige no mínimo os 24 testes do
+baseline atual e confirma a execução das três classes de teste esperadas. O
+workflow rejeita falhas, erros, testes ignorados ou relatórios Surefire
+ausentes, mas permite que novos testes aumentem o total sem exigir manutenção
+da contagem. JaCoCo, PMD, CPD e o smoke test SQLite isolado continuam
+obrigatórios. Não há publicação, deploy ou secrets de produção.
 
 ## Contrato HTTP e erros
 
@@ -295,7 +320,7 @@ O cabeçalho `X-Correlation-Id` é devolvido na resposta e aparece nos logs. Val
 
 ## Banco e integridade
 
-- E-mail, código do item e patrimônio possuem unicidade declarada nas entidades e validação na aplicação. O dialect SQLite não materializa essas constraints em um banco novo; a garantia no banco permanece pendente até a adoção de migrações e a validação PostgreSQL.
+- E-mail, código do item e patrimônio possuem unicidade materializada pelas migrações e validação na aplicação.
 - FKs de movimentações são obrigatórias.
 - Quantidades e campos essenciais usam `NOT NULL` e checks de não negatividade.
 - O estado `EMPRESTADA` exige responsável atual; outros estados exigem responsável nulo.
@@ -319,8 +344,11 @@ O cabeçalho `X-Correlation-Id` é devolvido na resposta e aparece nos logs. Val
 ├── src/main/resources
 │   ├── application.properties
 │   ├── application-sqlite.properties
+│   ├── application-sqlite-seed.properties
 │   ├── application-postgresql.properties
-│   └── data.sql
+│   ├── db/migration/sqlite
+│   ├── db/migration/postgresql
+│   └── db/seed/sqlite
 ├── src/test
 ├── scripts/windows
 ├── scripts/linux-macos
@@ -345,16 +373,16 @@ Não há screenshots no repositório. Esta entrega contém somente o backend e a
 ## Roadmap
 
 1. Adicionar autenticação e autorização por perfil com Spring Security.
-2. Adotar Flyway ou Liquibase e usar `JPA_DDL_AUTO=validate` em produção.
-3. Criar testes PostgreSQL com Testcontainers, incluindo concorrência real.
-4. Paginar listagens e históricos potencialmente grandes.
-5. Tornar os dados de auditoria independentes de alterações cadastrais posteriores.
-6. Criar frontend e screenshots dos fluxos de usuário.
-7. Adicionar métricas, tracing e alertas; avaliar cache somente após medir a carga.
+2. Executar as migrações PostgreSQL em instância real e adicionar Testcontainers.
+3. Paginar listagens e históricos potencialmente grandes.
+4. Tornar os dados de auditoria independentes de alterações cadastrais posteriores.
+5. Criar frontend e screenshots dos fluxos de usuário.
+6. Adicionar métricas, tracing e alertas; avaliar cache somente após medir a carga.
 
 ## Relatórios e roteiro
 
 - [HARDENING_REPORT.md](HARDENING_REPORT.md)
+- [FLYWAY_MIGRATIONS.md](FLYWAY_MIGRATIONS.md)
 - [CODE_REVIEW_REPORT.md](CODE_REVIEW_REPORT.md)
 - [COVERAGE_REPORT.md](COVERAGE_REPORT.md)
 - [ROTEIRO_TESTES_MANUAIS.md](ROTEIRO_TESTES_MANUAIS.md)
