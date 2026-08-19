@@ -38,9 +38,10 @@ jobs:
           $expectedSuites = @(
             "com.equipe.estoque.ApplicationFlowIntegrationTest",
             "com.equipe.estoque.HardeningIntegrationTest",
+            "com.equipe.estoque.PostgreSQLTestcontainersIntegrationTest",
             "com.equipe.estoque.config.SQLiteLegacyBaselineCallbackTest"
           )
-          $minimumTests = 24
+          $minimumTests = 25
           $total = 0
           $executedSuites = @()
           foreach ($report in $reports) {
