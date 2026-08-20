@@ -12,6 +12,7 @@ import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.tags.Tag;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,19 +28,28 @@ public class OpenApiConfig {
         components
                 .addSchemas("Erro", errorSchema())
                 .addResponses("BadRequest", errorResponse("Requisição inválida ou regra de negócio violada"))
+                .addResponses("Unauthorized", errorResponse("Token ausente, inválido ou expirado"))
+                .addResponses("Forbidden", errorResponse("Conta autenticada sem permissão na organização"))
                 .addResponses("NotFound", errorResponse("Recurso não encontrado"))
                 .addResponses("Conflict", errorResponse("Conflito de integridade ou atualização concorrente"))
-                .addResponses("InternalError", errorResponse("Falha interna sem exposição de detalhes técnicos"));
+                .addResponses("InternalError", errorResponse("Falha interna sem exposição de detalhes técnicos"))
+                .addSecuritySchemes("bearerAuth", new SecurityScheme()
+                        .type(SecurityScheme.Type.HTTP)
+                        .scheme("bearer")
+                        .bearerFormat("JWT")
+                        .description("Access token obtido em POST /api/auth/login"));
 
         return new OpenAPI()
                 .info(new Info()
                         .title("API de Estoque e Ferramentas")
                         .version("1.0.0")
-                        .description("API REST para cadastros, saldos, empréstimos e trilhas imutáveis de movimentação. "
-                                + "Autenticação de usuários finais ainda não faz parte desta versão.")
+                        .description("API REST protegida para contas, organizações, estoque, ferramentas e trilhas "
+                                + "imutáveis de movimentação.")
                         .contact(new Contact().name("Equipe do projeto")))
                 .components(components)
                 .tags(List.of(
+                        new Tag().name("Autenticação").description("Cadastro, login e identidade da conta"),
+                        new Tag().name("Organizações").description("Organizações, solicitações e membros"),
                         new Tag().name("Usuários").description("Cadastro de responsáveis pelas operações"),
                         new Tag().name("Itens de estoque").description("Itens consumíveis e movimentações de saldo"),
                         new Tag().name("Ferramentas").description("Ferramentas patrimoniais, empréstimos e estados"),

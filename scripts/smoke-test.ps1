@@ -155,6 +155,16 @@ $isolatedSnapshot = $null
 $firstCounts = $null
 $secondCounts = $null
 $smokeEmail = "smoke-$runId@example.test"
+$smokePassword = "SmokeSenha!2026"
+$jwtSecretBytes = [byte[]]::new(32)
+$randomNumberGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+    $randomNumberGenerator.GetBytes($jwtSecretBytes)
+}
+finally {
+    $randomNumberGenerator.Dispose()
+}
+$jwtSecret = [Convert]::ToBase64String($jwtSecretBytes)
 
 New-Item -ItemType Directory -Path $workDirectory -Force | Out-Null
 
@@ -173,6 +183,7 @@ function Start-SmokeBackend {
     $processEnvironment = @{
         SERVER_PORT = [string]$port
         SQLITE_URL = $sqliteUrl
+        APP_JWT_SECRET = $jwtSecret
     }
     $previousEnvironment = @{}
     foreach ($entry in $processEnvironment.GetEnumerator()) {
@@ -267,17 +278,50 @@ try {
     $swagger = Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/swagger-ui.html"
     Assert-Status -Response $swagger -Expected 200 -Description "Swagger UI"
 
-    $validBody = @{
+    $registerBody = @{
         nome = "Usuário Smoke Test"
         email = $smokeEmail
-        perfil = "OPERADOR"
+        senha = $smokePassword
     } | ConvertTo-Json -Compress
-    $validResponse = Invoke-SmokeHttp -Method "POST" -Uri "$baseUrl/api/usuarios" -Body $validBody
-    Assert-Status -Response $validResponse -Expected 201 -Description "Requisição válida"
-    $createdUser = $validResponse.Content | ConvertFrom-Json
+    $registerResponse = Invoke-SmokeHttp -Method "POST" -Uri "$baseUrl/api/auth/register" -Body $registerBody
+    Assert-Status -Response $registerResponse -Expected 201 -Description "Cadastro de conta válido"
+    $createdUser = $registerResponse.Content | ConvertFrom-Json
 
-    $invalidBody = '{"nome":"Inválido","email":"invalido@example.test","perfil":"NAO_EXISTE"}'
-    $invalidResponse = Invoke-SmokeHttp -Method "POST" -Uri "$baseUrl/api/usuarios" `
+    $loginBody = @{
+        email = $smokeEmail
+        senha = $smokePassword
+    } | ConvertTo-Json -Compress
+    $loginResponse = Invoke-SmokeHttp -Method "POST" -Uri "$baseUrl/api/auth/login" -Body $loginBody
+    Assert-Status -Response $loginResponse -Expected 200 -Description "Login válido"
+    $accessToken = ($loginResponse.Content | ConvertFrom-Json).accessToken
+    if ([string]::IsNullOrWhiteSpace($accessToken)) {
+        throw "O login não retornou um token de acesso."
+    }
+    $authorizationHeaders = @{ "Authorization" = "Bearer $accessToken" }
+
+    $organizationBody = @{ nome = "Organização Smoke $runId" } | ConvertTo-Json -Compress
+    $organizationResponse = Invoke-SmokeHttp -Method "POST" -Uri "$baseUrl/api/organizacoes" `
+        -Body $organizationBody -Headers $authorizationHeaders
+    Assert-Status -Response $organizationResponse -Expected 201 -Description "Criação de organização"
+    $organization = $organizationResponse.Content | ConvertFrom-Json
+    $tenantHeaders = @{
+        "Authorization" = "Bearer $accessToken"
+        "X-Organization-Id" = [string]$organization.id
+    }
+
+    $itemBody = @{
+        codigo = "SMOKE-$runId"
+        nome = "Item Smoke Test"
+        quantidadeAtual = 1
+        quantidadeMinima = 0
+    } | ConvertTo-Json -Compress
+    $validResponse = Invoke-SmokeHttp -Method "POST" -Uri "$baseUrl/api/itens" `
+        -Body $itemBody -Headers $tenantHeaders
+    Assert-Status -Response $validResponse -Expected 201 -Description "Requisição autenticada válida"
+    $createdItem = $validResponse.Content | ConvertFrom-Json
+
+    $invalidBody = '{"nome":"Inválido","email":"invalido@example.test","senha":"SenhaLonga!2026","perfil":"ADMIN","organizacaoId":1}'
+    $invalidResponse = Invoke-SmokeHttp -Method "POST" -Uri "$baseUrl/api/auth/register" `
         -Body $invalidBody -Headers @{ "X-Correlation-Id" = "smoke-invalid-request" }
     Assert-Status -Response $invalidResponse -Expected 400 -Description "Requisição inválida"
     $invalidError = $invalidResponse.Content | ConvertFrom-Json
@@ -294,9 +338,15 @@ try {
         throw "A mensagem de erro contém detalhe interno: $($invalidError.mensagem)"
     }
 
-    $usersFirst = @(((Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/usuarios").Content | ConvertFrom-Json))
-    $itemsFirst = @(((Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/itens").Content | ConvertFrom-Json))
-    $toolsFirst = @(((Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/ferramentas").Content | ConvertFrom-Json))
+    $usersFirstResponse = Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/usuarios" -Headers $tenantHeaders
+    Assert-Status -Response $usersFirstResponse -Expected 200 -Description "Listagem de usuários"
+    $itemsFirstResponse = Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/itens" -Headers $tenantHeaders
+    Assert-Status -Response $itemsFirstResponse -Expected 200 -Description "Listagem de itens"
+    $toolsFirstResponse = Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/ferramentas" -Headers $tenantHeaders
+    Assert-Status -Response $toolsFirstResponse -Expected 200 -Description "Listagem de ferramentas"
+    $usersFirst = @($usersFirstResponse.Content | ConvertFrom-Json)
+    $itemsFirst = @($itemsFirstResponse.Content | ConvertFrom-Json)
+    $toolsFirst = @($toolsFirstResponse.Content | ConvertFrom-Json)
     Assert-NoDuplicates -Items $usersFirst -Property "email" -Description "usuários"
     Assert-NoDuplicates -Items $itemsFirst -Property "codigo" -Description "itens"
     Assert-NoDuplicates -Items $toolsFirst -Property "patrimonio" -Description "ferramentas"
@@ -318,9 +368,22 @@ try {
     $backend = Start-SmokeBackend
     Wait-ForHealth -RunningBackend $backend
 
-    $usersSecond = @(((Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/usuarios").Content | ConvertFrom-Json))
-    $itemsSecond = @(((Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/itens").Content | ConvertFrom-Json))
-    $toolsSecond = @(((Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/ferramentas").Content | ConvertFrom-Json))
+    $secondLoginResponse = Invoke-SmokeHttp -Method "POST" -Uri "$baseUrl/api/auth/login" -Body $loginBody
+    Assert-Status -Response $secondLoginResponse -Expected 200 -Description "Login após reinicialização"
+    $secondAccessToken = ($secondLoginResponse.Content | ConvertFrom-Json).accessToken
+    $secondTenantHeaders = @{
+        "Authorization" = "Bearer $secondAccessToken"
+        "X-Organization-Id" = [string]$organization.id
+    }
+    $usersSecondResponse = Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/usuarios" -Headers $secondTenantHeaders
+    Assert-Status -Response $usersSecondResponse -Expected 200 -Description "Listagem de usuários após reinicialização"
+    $itemsSecondResponse = Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/itens" -Headers $secondTenantHeaders
+    Assert-Status -Response $itemsSecondResponse -Expected 200 -Description "Listagem de itens após reinicialização"
+    $toolsSecondResponse = Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/ferramentas" -Headers $secondTenantHeaders
+    Assert-Status -Response $toolsSecondResponse -Expected 200 -Description "Listagem de ferramentas após reinicialização"
+    $usersSecond = @($usersSecondResponse.Content | ConvertFrom-Json)
+    $itemsSecond = @($itemsSecondResponse.Content | ConvertFrom-Json)
+    $toolsSecond = @($toolsSecondResponse.Content | ConvertFrom-Json)
     Assert-NoDuplicates -Items $usersSecond -Property "email" -Description "usuários após reinicialização"
     Assert-NoDuplicates -Items $itemsSecond -Property "codigo" -Description "itens após reinicialização"
     Assert-NoDuplicates -Items $toolsSecond -Property "patrimonio" -Description "ferramentas após reinicialização"
@@ -338,6 +401,10 @@ try {
     $smokeUsers = @($usersSecond | Where-Object { $_.email -eq $smokeEmail })
     if ($smokeUsers.Count -ne 1 -or $smokeUsers[0].id -ne $createdUser.id) {
         throw "O usuário criado não foi persistido exatamente uma vez no banco isolado."
+    }
+    $smokeItems = @($itemsSecond | Where-Object { $_.codigo -eq $createdItem.codigo })
+    if ($smokeItems.Count -ne 1 -or $smokeItems[0].id -ne $createdItem.id) {
+        throw "O item criado não foi persistido exatamente uma vez no banco isolado."
     }
 
     $secondStopped = Stop-SmokeBackend -RunningBackend $backend
@@ -367,6 +434,9 @@ try {
         openApiStatus = 200
         openApiVersion = $openApiBody.openapi
         swaggerStatus = 200
+        accountRegistrationStatus = 201
+        loginStatus = 200
+        organizationCreationStatus = 201
         validRequestStatus = 201
         invalidRequestStatus = 400
         invalidRequestCode = $invalidError.codigo

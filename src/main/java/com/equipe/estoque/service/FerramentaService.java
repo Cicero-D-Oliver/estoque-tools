@@ -123,20 +123,13 @@ public class FerramentaService {
 
     @Transactional
     public MovimentacaoFerramentaResponseDTO registrarRetirada(
-            Long ferramentaId,
-            MovimentacaoFerramentaRequestDTO dto
-    ) {
-        return registrarRetirada(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId, dto);
-    }
-
-    @Transactional
-    public MovimentacaoFerramentaResponseDTO registrarRetirada(
             Long organizacaoId,
             Long ferramentaId,
+            Long executorUsuarioId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
         Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
+        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
         if (ferramenta.getStatus() != StatusFerramenta.DISPONIVEL) {
             throw new BusinessException("Ferramenta não está disponível para retirada. Status atual: "
                     + ferramenta.getStatus());
@@ -154,20 +147,13 @@ public class FerramentaService {
 
     @Transactional
     public MovimentacaoFerramentaResponseDTO registrarDevolucao(
-            Long ferramentaId,
-            MovimentacaoFerramentaRequestDTO dto
-    ) {
-        return registrarDevolucao(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId, dto);
-    }
-
-    @Transactional
-    public MovimentacaoFerramentaResponseDTO registrarDevolucao(
             Long organizacaoId,
             Long ferramentaId,
+            Long executorUsuarioId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
         Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
+        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
         if (ferramenta.getStatus() != StatusFerramenta.EMPRESTADA) {
             throw new BusinessException("Ferramenta não está emprestada. Status atual: " + ferramenta.getStatus());
         }
@@ -184,20 +170,13 @@ public class FerramentaService {
 
     @Transactional
     public MovimentacaoFerramentaResponseDTO registrarManutencao(
-            Long ferramentaId,
-            MovimentacaoFerramentaRequestDTO dto
-    ) {
-        return registrarManutencao(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId, dto);
-    }
-
-    @Transactional
-    public MovimentacaoFerramentaResponseDTO registrarManutencao(
             Long organizacaoId,
             Long ferramentaId,
+            Long executorUsuarioId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
         Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
+        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
         if (ferramenta.getStatus() == StatusFerramenta.PERDIDA) {
             throw new BusinessException("Ferramenta perdida não pode ser enviada para manutenção");
         }
@@ -217,20 +196,13 @@ public class FerramentaService {
 
     @Transactional
     public MovimentacaoFerramentaResponseDTO registrarPerda(
-            Long ferramentaId,
-            MovimentacaoFerramentaRequestDTO dto
-    ) {
-        return registrarPerda(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId, dto);
-    }
-
-    @Transactional
-    public MovimentacaoFerramentaResponseDTO registrarPerda(
             Long organizacaoId,
             Long ferramentaId,
+            Long executorUsuarioId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
         Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
+        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
         if (ferramenta.getStatus() == StatusFerramenta.PERDIDA) {
             throw new BusinessException("Ferramenta já está marcada como perdida");
         }
@@ -247,16 +219,9 @@ public class FerramentaService {
 
     @Transactional
     public MovimentacaoFerramentaResponseDTO registrarCorrecao(
-            Long ferramentaId,
-            MovimentacaoFerramentaRequestDTO dto
-    ) {
-        return registrarCorrecao(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId, dto);
-    }
-
-    @Transactional
-    public MovimentacaoFerramentaResponseDTO registrarCorrecao(
             Long organizacaoId,
             Long ferramentaId,
+            Long executorUsuarioId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
         if (dto.getNovoStatus() == null) {
@@ -267,7 +232,7 @@ public class FerramentaService {
         }
         String observacao = requireObservation(dto.getObservacao());
         Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
+        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
         StatusFerramenta statusAnterior = ferramenta.getStatus();
         if (statusAnterior == dto.getNovoStatus()) {
             throw new BusinessException("O novo status deve ser diferente do status atual");

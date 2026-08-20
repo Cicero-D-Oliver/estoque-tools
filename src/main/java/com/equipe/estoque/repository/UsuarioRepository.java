@@ -11,6 +11,10 @@ import java.util.Optional;
 public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     boolean existsByEmail(String email);
 
+    Optional<Usuario> findByEmailIgnoreCase(String email);
+
+    boolean existsByIdAndAtivoTrueAndSenhaHashIsNotNull(Long id);
+
     Optional<Usuario> findFirstByOrderByIdAsc();
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

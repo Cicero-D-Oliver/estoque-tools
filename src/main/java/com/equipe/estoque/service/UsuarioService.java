@@ -5,6 +5,8 @@ import com.equipe.estoque.dto.usuario.UsuarioResponseDTO;
 import com.equipe.estoque.entity.Usuario;
 import com.equipe.estoque.exception.BusinessException;
 import com.equipe.estoque.exception.ResourceNotFoundException;
+import com.equipe.estoque.enums.StatusMembroOrganizacao;
+import com.equipe.estoque.repository.OrganizacaoMembroRepository;
 import com.equipe.estoque.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +23,7 @@ import java.util.Locale;
 public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
+    private final OrganizacaoMembroRepository membroRepository;
 
     @Transactional
     public UsuarioResponseDTO criar(UsuarioRequestDTO dto) {
@@ -43,6 +46,20 @@ public class UsuarioService {
 
     public List<UsuarioResponseDTO> listarTodos() {
         return usuarioRepository.findAll().stream().map(this::paraResponseDTO).toList();
+    }
+
+    public List<UsuarioResponseDTO> listarDaOrganizacao(Long organizacaoId) {
+        return membroRepository.findByOrganizacaoIdOrderByUsuarioNomeAscIdAsc(organizacaoId).stream()
+                .filter(membro -> membro.getStatus() == StatusMembroOrganizacao.ATIVO)
+                .map(membro -> paraResponseDTO(membro.getUsuario()))
+                .toList();
+    }
+
+    public UsuarioResponseDTO buscarNaOrganizacao(Long organizacaoId, Long usuarioId) {
+        return membroRepository.findByOrganizacaoIdAndUsuarioId(organizacaoId, usuarioId)
+                .filter(membro -> membro.getStatus() == StatusMembroOrganizacao.ATIVO)
+                .map(membro -> paraResponseDTO(membro.getUsuario()))
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado na organização"));
     }
 
     public UsuarioResponseDTO buscarPorId(Long id) {

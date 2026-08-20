@@ -18,6 +18,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import java.time.LocalDateTime;
+
 @Entity
 @Table(
         name = "usuarios",
@@ -45,6 +49,16 @@ public class Usuario {
 
     @Column(nullable = false, length = 254)
     private String email;
+
+    @JsonIgnore
+    @Column(name = "senha_hash", length = 100)
+    private String senhaHash;
+
+    @Column(name = "senha_alterada_em")
+    private LocalDateTime senhaAlteradaEm;
+
+    @Column(name = "ultimo_login_em")
+    private LocalDateTime ultimoLoginEm;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

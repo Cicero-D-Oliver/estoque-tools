@@ -56,7 +56,7 @@ class SQLiteLegacyBaselineCallbackTest {
     }
 
     @Test
-    void deveAceitarLegadoConhecidoAplicarAteV4EPreservarDados() throws Exception {
+    void deveAceitarLegadoConhecidoAplicarAteV5EPreservarDados() throws Exception {
         DataSource dataSource = createKnownLegacyDatabase("compatible.db");
         Map<String, String> hashesBefore = canonicalDataHashes(dataSource);
 
@@ -64,7 +64,7 @@ class SQLiteLegacyBaselineCallbackTest {
 
         assertEquals(hashesBefore, canonicalDataHashes(dataSource));
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:BASELINE:1", "2:SQL:1", "3:SQL:1", "4:SQL:1");
+            assertHistory(connection, "1:BASELINE:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1");
             assertEquals(7, countApplicationTables(connection));
             assertEquals(1, countRows(connection, "organizacoes"));
             assertEquals(3, countRows(connection, "organizacao_membros"));
@@ -98,13 +98,13 @@ class SQLiteLegacyBaselineCallbackTest {
     }
 
     @Test
-    void bancoNovoVazioDeveAplicarV1AteV4SemBaseline() throws Exception {
+    void bancoNovoVazioDeveAplicarV1AteV5SemBaseline() throws Exception {
         DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("empty.db"));
 
         migrate(dataSource, true);
 
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1");
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1");
             assertEquals(7, countApplicationTables(connection));
             assertEquals(0, countRows(connection, "organizacoes"));
             assertEquals(0, foreignKeyViolationCount(connection));
@@ -155,13 +155,43 @@ class SQLiteLegacyBaselineCallbackTest {
 
         assertEquals(hashesBefore, canonicalDataHashes(dataSource));
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1");
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1");
             assertEquals(1, countRows(connection, "usuarios"));
             assertEquals(1, countRows(connection, "organizacoes"));
             assertEquals(1, countRows(connection, "organizacao_membros"));
             assertEquals(0, countMismatchedLegacyProfiles(connection));
             assertEquals(0, countOperationalRowsOutsideLegacyOrganization(connection));
             assertEquals(0, foreignKeyViolationCount(connection));
+        }
+    }
+
+    @Test
+    void deveMigrarBancoPopuladoDeV4ParaV5SemInventarCredencial() throws Exception {
+        DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("v4-to-v5.db"));
+        migrateToVersion4(dataSource);
+        try (Connection connection = dataSource.getConnection()) {
+            execute(connection, """
+                    INSERT INTO usuarios (id, versao, nome, email, perfil, ativo)
+                    VALUES (701, 9, 'Legado V4', 'legado-v5@example.com', 'CONSULTA', 1)
+                    """);
+        }
+
+        migrate(dataSource, false);
+
+        try (Connection connection = dataSource.getConnection()) {
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1");
+            assertEquals(1, countRows(connection, "usuarios"));
+            try (Statement statement = connection.createStatement();
+                 ResultSet result = statement.executeQuery("""
+                         SELECT versao, senha_hash, senha_alterada_em, ultimo_login_em
+                           FROM usuarios WHERE id = 701
+                         """)) {
+                assertTrue(result.next());
+                assertEquals(9, result.getInt("versao"));
+                assertEquals(null, result.getString("senha_hash"));
+                assertEquals(null, result.getString("senha_alterada_em"));
+                assertEquals(null, result.getString("ultimo_login_em"));
+            }
         }
     }
 
@@ -293,6 +323,15 @@ class SQLiteLegacyBaselineCallbackTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration/sqlite")
                 .target("3")
+                .load()
+                .migrate();
+    }
+
+    private static void migrateToVersion4(DataSource dataSource) {
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration/sqlite")
+                .target("4")
                 .load()
                 .migrate();
     }

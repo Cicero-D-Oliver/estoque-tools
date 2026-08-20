@@ -2,6 +2,7 @@ package com.equipe.estoque.config;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.AssertTrue;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -31,4 +32,9 @@ public class CorsProperties {
 
     @PositiveOrZero
     private long maxAge = 3600;
+
+    @AssertTrue(message = "CORS com credenciais exige origens explícitas")
+    public boolean isCredentialsConfigurationSafe() {
+        return !allowCredentials || allowedOrigins.stream().noneMatch(origin -> origin.contains("*"));
+    }
 }
