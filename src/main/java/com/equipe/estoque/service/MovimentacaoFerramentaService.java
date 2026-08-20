@@ -22,9 +22,17 @@ import java.util.List;
 public class MovimentacaoFerramentaService {
 
     private final MovimentacaoFerramentaRepository movimentacaoFerramentaRepository;
+    private final OrganizacaoService organizacaoService;
 
     public List<MovimentacaoFerramentaResponseDTO> listarTodas() {
-        return movimentacaoFerramentaRepository.findAll()
+        return organizacaoService.buscarIdOrganizacaoLegada()
+                .map(this::listarTodas)
+                .orElseGet(List::of);
+    }
+
+    public List<MovimentacaoFerramentaResponseDTO> listarTodas(Long organizacaoId) {
+        organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
+        return movimentacaoFerramentaRepository.findAllByOrganizacaoId(organizacaoId)
                 .stream()
                 .map(this::paraResponseDTO)
                 .toList();

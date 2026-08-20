@@ -25,10 +25,23 @@ import org.hibernate.annotations.Check;
 @Entity
 @Table(
         name = "ferramentas",
-        uniqueConstraints = @UniqueConstraint(name = "uk_ferramentas_patrimonio", columnNames = "patrimonio"),
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_ferramentas_organizacao_patrimonio",
+                        columnNames = {"organizacao_id", "patrimonio"}
+                ),
+                @UniqueConstraint(
+                        name = "uk_ferramentas_organizacao_id",
+                        columnNames = {"organizacao_id", "id"}
+                )
+        },
         indexes = {
                 @Index(name = "idx_ferramentas_status_ativo", columnList = "status, ativo"),
-                @Index(name = "idx_ferramentas_responsavel", columnList = "responsavel_atual_id")
+                @Index(name = "idx_ferramentas_responsavel", columnList = "responsavel_atual_id"),
+                @Index(
+                        name = "idx_ferramentas_organizacao_status_ativo",
+                        columnList = "organizacao_id, status, ativo"
+                )
         }
 )
 @Check(constraints = "(status = 'EMPRESTADA' AND responsavel_atual_id IS NOT NULL) OR "
@@ -48,6 +61,10 @@ public class Ferramenta {
     @Builder.Default
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private Long versao = 0L;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "organizacao_id", nullable = false)
+    private Organizacao organizacao;
 
     @Column(nullable = false, length = 60)
     private String patrimonio;

@@ -15,11 +15,28 @@ public interface MovimentacaoFerramentaRepository extends JpaRepository<Moviment
     List<MovimentacaoFerramenta> findAll();
 
     @EntityGraph(attributePaths = {"ferramenta", "usuario"})
+    List<MovimentacaoFerramenta> findAllByOrganizacaoId(Long organizacaoId);
+
+    @EntityGraph(attributePaths = {"ferramenta", "usuario"})
     List<MovimentacaoFerramenta> findByFerramentaIdOrderByDataHoraDescIdDesc(Long ferramentaId);
+
+    @EntityGraph(attributePaths = {"ferramenta", "usuario"})
+    List<MovimentacaoFerramenta> findByOrganizacaoIdAndFerramentaIdOrderByDataHoraDescIdDesc(
+            Long organizacaoId,
+            Long ferramentaId
+    );
 
     @EntityGraph(attributePaths = {"ferramenta", "usuario"})
     Optional<MovimentacaoFerramenta> findTopByFerramentaIdAndTipoMovimentacaoOrderByDataHoraDescIdDesc(
             Long ferramentaId,
             TipoMovimentacaoFerramenta tipoMovimentacao
     );
+
+    @EntityGraph(attributePaths = {"ferramenta", "usuario"})
+    Optional<MovimentacaoFerramenta>
+            findTopByOrganizacaoIdAndFerramentaIdAndTipoMovimentacaoOrderByDataHoraDescIdDesc(
+                    Long organizacaoId,
+                    Long ferramentaId,
+                    TipoMovimentacaoFerramenta tipoMovimentacao
+            );
 }

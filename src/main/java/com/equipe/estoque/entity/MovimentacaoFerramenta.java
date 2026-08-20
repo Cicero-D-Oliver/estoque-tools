@@ -28,7 +28,11 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_mov_ferramenta_ferramenta_data", columnList = "ferramenta_id, data_hora"),
                 @Index(name = "idx_mov_ferramenta_usuario", columnList = "usuario_id"),
-                @Index(name = "idx_mov_ferramenta_tipo_data", columnList = "tipo_movimentacao, data_hora")
+                @Index(name = "idx_mov_ferramenta_tipo_data", columnList = "tipo_movimentacao, data_hora"),
+                @Index(
+                        name = "idx_mov_ferramenta_organizacao_data",
+                        columnList = "organizacao_id, data_hora"
+                )
         }
 )
 @Getter
@@ -40,6 +44,10 @@ public class MovimentacaoFerramenta {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "organizacao_id", nullable = false)
+    private Organizacao organizacao;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "ferramenta_id", nullable = false)

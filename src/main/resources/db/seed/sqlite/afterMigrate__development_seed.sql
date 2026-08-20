@@ -49,43 +49,94 @@ WHERE organizacao.nome = 'Organização de Desenvolvimento'
   );
 
 INSERT INTO itens_estoque (
-    codigo, nome, categoria, quantidade_atual, quantidade_minima, localizacao, ativo
+    organizacao_id, codigo, nome, categoria,
+    quantidade_atual, quantidade_minima, localizacao, ativo
 )
 SELECT
-    'ITEM-001', 'Luva de Proteção (par)', 'EPI', 50, 10,
+    organizacao.id, 'ITEM-001', 'Luva de Proteção (par)', 'EPI', 50, 10,
     'Almoxarifado A - Prateleira 1', true
-WHERE NOT EXISTS (SELECT 1 FROM itens_estoque WHERE codigo = 'ITEM-001');
+FROM organizacoes organizacao
+JOIN usuarios criador ON criador.id = organizacao.criada_por_usuario_id
+WHERE organizacao.nome = 'Organização de Desenvolvimento'
+  AND criador.email = 'junao@equipe.com'
+  AND NOT EXISTS (
+      SELECT 1 FROM itens_estoque item
+       WHERE item.organizacao_id = organizacao.id AND item.codigo = 'ITEM-001'
+  );
 
 INSERT INTO itens_estoque (
-    codigo, nome, categoria, quantidade_atual, quantidade_minima, localizacao, ativo
+    organizacao_id, codigo, nome, categoria,
+    quantidade_atual, quantidade_minima, localizacao, ativo
 )
 SELECT
-    'ITEM-002', 'Fita Isolante', 'Elétrica', 8, 15,
+    organizacao.id, 'ITEM-002', 'Fita Isolante', 'Elétrica', 8, 15,
     'Almoxarifado A - Prateleira 2', true
-WHERE NOT EXISTS (SELECT 1 FROM itens_estoque WHERE codigo = 'ITEM-002');
+FROM organizacoes organizacao
+JOIN usuarios criador ON criador.id = organizacao.criada_por_usuario_id
+WHERE organizacao.nome = 'Organização de Desenvolvimento'
+  AND criador.email = 'junao@equipe.com'
+  AND NOT EXISTS (
+      SELECT 1 FROM itens_estoque item
+       WHERE item.organizacao_id = organizacao.id AND item.codigo = 'ITEM-002'
+  );
 
 INSERT INTO itens_estoque (
-    codigo, nome, categoria, quantidade_atual, quantidade_minima, localizacao, ativo
+    organizacao_id, codigo, nome, categoria,
+    quantidade_atual, quantidade_minima, localizacao, ativo
 )
 SELECT
-    'ITEM-003', 'Parafuso Sextavado M8', 'Fixação', 200, 50,
+    organizacao.id, 'ITEM-003', 'Parafuso Sextavado M8', 'Fixação', 200, 50,
     'Almoxarifado B - Gaveta 3', true
-WHERE NOT EXISTS (SELECT 1 FROM itens_estoque WHERE codigo = 'ITEM-003');
+FROM organizacoes organizacao
+JOIN usuarios criador ON criador.id = organizacao.criada_por_usuario_id
+WHERE organizacao.nome = 'Organização de Desenvolvimento'
+  AND criador.email = 'junao@equipe.com'
+  AND NOT EXISTS (
+      SELECT 1 FROM itens_estoque item
+       WHERE item.organizacao_id = organizacao.id AND item.codigo = 'ITEM-003'
+  );
 
-INSERT INTO ferramentas (patrimonio, nome, categoria, status, localizacao, ativo)
+INSERT INTO ferramentas (
+    organizacao_id, patrimonio, nome, categoria, status, localizacao, ativo
+)
 SELECT
-    'PAT-1001', 'Furadeira de Impacto Bosch', 'Elétrica', 'DISPONIVEL',
+    organizacao.id, 'PAT-1001', 'Furadeira de Impacto Bosch', 'Elétrica', 'DISPONIVEL',
     'Almoxarifado A - Armário 1', true
-WHERE NOT EXISTS (SELECT 1 FROM ferramentas WHERE patrimonio = 'PAT-1001');
+FROM organizacoes organizacao
+JOIN usuarios criador ON criador.id = organizacao.criada_por_usuario_id
+WHERE organizacao.nome = 'Organização de Desenvolvimento'
+  AND criador.email = 'junao@equipe.com'
+  AND NOT EXISTS (
+      SELECT 1 FROM ferramentas ferramenta
+       WHERE ferramenta.organizacao_id = organizacao.id AND ferramenta.patrimonio = 'PAT-1001'
+  );
 
-INSERT INTO ferramentas (patrimonio, nome, categoria, status, localizacao, ativo)
+INSERT INTO ferramentas (
+    organizacao_id, patrimonio, nome, categoria, status, localizacao, ativo
+)
 SELECT
-    'PAT-1002', 'Chave de Torque', 'Manual', 'DISPONIVEL',
+    organizacao.id, 'PAT-1002', 'Chave de Torque', 'Manual', 'DISPONIVEL',
     'Almoxarifado A - Armário 2', true
-WHERE NOT EXISTS (SELECT 1 FROM ferramentas WHERE patrimonio = 'PAT-1002');
+FROM organizacoes organizacao
+JOIN usuarios criador ON criador.id = organizacao.criada_por_usuario_id
+WHERE organizacao.nome = 'Organização de Desenvolvimento'
+  AND criador.email = 'junao@equipe.com'
+  AND NOT EXISTS (
+      SELECT 1 FROM ferramentas ferramenta
+       WHERE ferramenta.organizacao_id = organizacao.id AND ferramenta.patrimonio = 'PAT-1002'
+  );
 
-INSERT INTO ferramentas (patrimonio, nome, categoria, status, localizacao, ativo)
+INSERT INTO ferramentas (
+    organizacao_id, patrimonio, nome, categoria, status, localizacao, ativo
+)
 SELECT
-    'PAT-1003', 'Multímetro Digital', 'Eletrônica', 'DISPONIVEL',
+    organizacao.id, 'PAT-1003', 'Multímetro Digital', 'Eletrônica', 'DISPONIVEL',
     'Almoxarifado B - Armário 1', true
-WHERE NOT EXISTS (SELECT 1 FROM ferramentas WHERE patrimonio = 'PAT-1003');
+FROM organizacoes organizacao
+JOIN usuarios criador ON criador.id = organizacao.criada_por_usuario_id
+WHERE organizacao.nome = 'Organização de Desenvolvimento'
+  AND criador.email = 'junao@equipe.com'
+  AND NOT EXISTS (
+      SELECT 1 FROM ferramentas ferramenta
+       WHERE ferramenta.organizacao_id = organizacao.id AND ferramenta.patrimonio = 'PAT-1003'
+  );
