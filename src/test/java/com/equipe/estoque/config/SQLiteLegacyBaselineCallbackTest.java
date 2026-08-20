@@ -56,7 +56,7 @@ class SQLiteLegacyBaselineCallbackTest {
     }
 
     @Test
-    void deveAceitarLegadoConhecidoAplicarV2EPreservarDados() throws Exception {
+    void deveAceitarLegadoConhecidoAplicarV2EV3EPreservarDados() throws Exception {
         DataSource dataSource = createKnownLegacyDatabase("compatible.db");
         Map<String, String> hashesBefore = canonicalDataHashes(dataSource);
 
@@ -64,8 +64,11 @@ class SQLiteLegacyBaselineCallbackTest {
 
         assertEquals(hashesBefore, canonicalDataHashes(dataSource));
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:BASELINE:1", "2:SQL:1");
-            assertEquals(5, countApplicationTables(connection));
+            assertHistory(connection, "1:BASELINE:1", "2:SQL:1", "3:SQL:1");
+            assertEquals(7, countApplicationTables(connection));
+            assertEquals(1, countRows(connection, "organizacoes"));
+            assertEquals(3, countRows(connection, "organizacao_membros"));
+            assertEquals(0, countMismatchedLegacyProfiles(connection));
             assertEquals(0, foreignKeyViolationCount(connection));
         }
     }
@@ -94,16 +97,64 @@ class SQLiteLegacyBaselineCallbackTest {
     }
 
     @Test
-    void bancoNovoVazioDeveAplicarV1EV2SemBaseline() throws Exception {
+    void bancoNovoVazioDeveAplicarV1V2EV3SemBaseline() throws Exception {
         DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("empty.db"));
 
         migrate(dataSource, true);
 
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:SQL:1", "2:SQL:1");
-            assertEquals(5, countApplicationTables(connection));
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1");
+            assertEquals(7, countApplicationTables(connection));
+            assertEquals(0, countRows(connection, "organizacoes"));
             assertEquals(0, foreignKeyViolationCount(connection));
         }
+    }
+
+    @Test
+    void deveMigrarBancoEmV2ParaV3SemPerderUsuarios() throws Exception {
+        DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("v2-to-v3.db"));
+        migrateToVersion2(dataSource);
+        try (Connection connection = dataSource.getConnection()) {
+            execute(connection, """
+                    INSERT INTO usuarios (id, versao, nome, email, perfil, ativo)
+                    VALUES (101, 4, 'Usuário Existente', 'existente@example.com', 'CONSULTA', 1)
+                    """);
+        }
+        Map<String, String> hashesBefore = canonicalDataHashes(dataSource);
+
+        migrate(dataSource, false);
+
+        assertEquals(hashesBefore, canonicalDataHashes(dataSource));
+        try (Connection connection = dataSource.getConnection()) {
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1");
+            assertEquals(1, countRows(connection, "usuarios"));
+            assertEquals(1, countRows(connection, "organizacoes"));
+            assertEquals(1, countRows(connection, "organizacao_membros"));
+            assertEquals(0, countMismatchedLegacyProfiles(connection));
+            assertEquals(0, foreignKeyViolationCount(connection));
+        }
+    }
+
+    @Test
+    void seedDeDesenvolvimentoDeveSerOpcionalEIdempotente() throws Exception {
+        DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("development-seed.db"));
+        Flyway flyway = Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration/sqlite", "classpath:db/seed/sqlite")
+                .load();
+
+        flyway.migrate();
+        Map<String, Integer> countsAfterFirstRun = developmentSeedCounts(dataSource);
+        flyway.migrate();
+
+        assertEquals(countsAfterFirstRun, developmentSeedCounts(dataSource));
+        assertEquals(Map.of(
+                "usuarios", 3,
+                "organizacoes", 1,
+                "organizacao_membros", 3,
+                "itens_estoque", 3,
+                "ferramentas", 3
+        ), countsAfterFirstRun);
     }
 
     private static Stream<Arguments> incompatibleSchemas() {
@@ -198,6 +249,15 @@ class SQLiteLegacyBaselineCallbackTest {
                 .migrate();
     }
 
+    private static void migrateToVersion2(DataSource dataSource) {
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration/sqlite")
+                .target("2")
+                .load()
+                .migrate();
+    }
+
     private static void replaceUsuarios(
             Connection connection,
             String uniqueConstraint,
@@ -261,6 +321,18 @@ class SQLiteLegacyBaselineCallbackTest {
         return hashes;
     }
 
+    private static Map<String, Integer> developmentSeedCounts(DataSource dataSource) throws SQLException {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        try (Connection connection = dataSource.getConnection()) {
+            counts.put("usuarios", countRows(connection, "usuarios"));
+            counts.put("organizacoes", countRows(connection, "organizacoes"));
+            counts.put("organizacao_membros", countRows(connection, "organizacao_membros"));
+            counts.put("itens_estoque", countRows(connection, "itens_estoque"));
+            counts.put("ferramentas", countRows(connection, "ferramentas"));
+        }
+        return Map.copyOf(counts);
+    }
+
     private static String hashRows(Connection connection, String sql) throws SQLException {
         MessageDigest digest = sha256Digest();
         try (PreparedStatement statement = connection.prepareStatement(sql);
@@ -314,8 +386,29 @@ class SQLiteLegacyBaselineCallbackTest {
                       WHERE type = 'table'
                         AND name IN (
                             'usuarios', 'itens_estoque', 'ferramentas',
-                            'movimentacoes_estoque', 'movimentacoes_ferramenta'
+                            'movimentacoes_estoque', 'movimentacoes_ferramenta',
+                            'organizacoes', 'organizacao_membros'
                         )
+                     """)) {
+            return result.getInt(1);
+        }
+    }
+
+    private static int countRows(Connection connection, String table) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM " + table)) {
+            return result.getInt(1);
+        }
+    }
+
+    private static int countMismatchedLegacyProfiles(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("""
+                     SELECT COUNT(*)
+                       FROM organizacao_membros membro
+                       JOIN usuarios usuario ON usuario.id = membro.usuario_id
+                      WHERE membro.perfil <> usuario.perfil
+                         OR membro.status <> 'ATIVO'
                      """)) {
             return result.getInt(1);
         }
