@@ -2,7 +2,13 @@ package com.equipe.estoque;
 
 import com.equipe.estoque.dto.usuario.UsuarioRequestDTO;
 import com.equipe.estoque.dto.usuario.UsuarioResponseDTO;
+import com.equipe.estoque.entity.Organizacao;
+import com.equipe.estoque.entity.OrganizacaoMembro;
+import com.equipe.estoque.enums.PerfilMembroOrganizacao;
 import com.equipe.estoque.enums.PerfilUsuario;
+import com.equipe.estoque.enums.StatusMembroOrganizacao;
+import com.equipe.estoque.repository.OrganizacaoMembroRepository;
+import com.equipe.estoque.service.OrganizacaoService;
 import com.equipe.estoque.service.UsuarioService;
 import jakarta.persistence.EntityManagerFactory;
 import org.flywaydb.core.Flyway;
@@ -12,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.env.Environment;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -26,6 +33,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
@@ -65,6 +73,12 @@ class PostgreSQLTestcontainersIntegrationTest {
     @Autowired
     private UsuarioService usuarioService;
 
+    @Autowired
+    private OrganizacaoService organizacaoService;
+
+    @Autowired
+    private OrganizacaoMembroRepository membroRepository;
+
     @Test
     void deveValidarAplicacaoComPostgresqlReal() {
         assertTrue(POSTGRESQL.isRunning());
@@ -77,12 +91,31 @@ class PostgreSQLTestcontainersIntegrationTest {
                  WHERE version IS NOT NULL
                  ORDER BY installed_rank
                 """);
-        assertEquals(List.of("1", "2"), migrations.stream()
+        assertEquals(List.of("1", "2", "3"), migrations.stream()
                 .map(migration -> migration.get("version").toString())
                 .toList());
         assertTrue(migrations.stream()
                 .allMatch(migration -> Boolean.TRUE.equals(migration.get("success"))));
-        assertEquals("2", flyway.info().current().getVersion().toString());
+        assertEquals("3", flyway.info().current().getVersion().toString());
+        assertEquals(2, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                  FROM information_schema.tables
+                 WHERE table_schema = 'public'
+                   AND table_name IN ('organizacoes', 'organizacao_membros')
+                """, Integer.class));
+        assertEquals(6, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                  FROM information_schema.table_constraints
+                 WHERE table_schema = 'public'
+                   AND constraint_name IN (
+                       'uk_organizacao_membros_organizacao_usuario',
+                       'ck_organizacao_membros_perfil',
+                       'ck_organizacao_membros_status',
+                       'fk_organizacao_membros_organizacao',
+                       'fk_organizacao_membros_usuario',
+                       'fk_organizacao_membros_aprovado_por'
+                   )
+                """, Integer.class));
 
         String serverVersion = jdbcTemplate.queryForObject("SHOW server_version", String.class);
         assertNotNull(serverVersion);
@@ -101,6 +134,21 @@ class PostgreSQLTestcontainersIntegrationTest {
                 Integer.class,
                 created.getEmail()
         ));
+
+        Organizacao organizacao = organizacaoService.criar(
+                "Organização PostgreSQL",
+                created.getId()
+        );
+        OrganizacaoMembro vinculo = membroRepository
+                .findByOrganizacaoIdAndUsuarioId(organizacao.getId(), created.getId())
+                .orElseThrow();
+        assertEquals(PerfilMembroOrganizacao.ADMIN, vinculo.getPerfil());
+        assertEquals(StatusMembroOrganizacao.ATIVO, vinculo.getStatus());
+        assertThrows(DataAccessException.class, () -> jdbcTemplate.update("""
+                INSERT INTO organizacao_membros (
+                    organizacao_id, usuario_id, perfil, status, solicitado_em
+                ) VALUES (?, ?, 'CONSULTA', 'ATIVO', CURRENT_TIMESTAMP)
+                """, organizacao.getId(), created.getId()));
 
         LOGGER.info(
                 "PostgreSQL Testcontainers validado image={} serverVersion={} migrations={}",

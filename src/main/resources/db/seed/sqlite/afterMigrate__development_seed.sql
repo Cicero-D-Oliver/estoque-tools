@@ -13,6 +13,41 @@ INSERT INTO usuarios (nome, email, perfil, ativo)
 SELECT 'Ana Consulta', 'ana@equipe.com', 'CONSULTA', true
 WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE email = 'ana@equipe.com');
 
+INSERT INTO organizacoes (
+    nome, ativa, criada_em, criada_por_usuario_id
+)
+SELECT
+    'Organização de Desenvolvimento', true, '2000-01-01 00:00:00', usuario.id
+FROM usuarios usuario
+WHERE usuario.email = 'junao@equipe.com'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM organizacoes organizacao
+      WHERE organizacao.nome = 'Organização de Desenvolvimento'
+        AND organizacao.criada_por_usuario_id = usuario.id
+  );
+
+INSERT INTO organizacao_membros (
+    organizacao_id, usuario_id, perfil, status,
+    solicitado_em, aprovado_em, aprovado_por_usuario_id
+)
+SELECT
+    organizacao.id, usuario.id, usuario.perfil, 'ATIVO',
+    '2000-01-01 00:00:00', '2000-01-01 00:00:00', criador.id
+FROM organizacoes organizacao
+JOIN usuarios criador ON criador.id = organizacao.criada_por_usuario_id
+JOIN usuarios usuario ON usuario.email IN (
+    'junao@equipe.com', 'carlos@equipe.com', 'ana@equipe.com'
+)
+WHERE organizacao.nome = 'Organização de Desenvolvimento'
+  AND criador.email = 'junao@equipe.com'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM organizacao_membros membro
+      WHERE membro.organizacao_id = organizacao.id
+        AND membro.usuario_id = usuario.id
+  );
+
 INSERT INTO itens_estoque (
     codigo, nome, categoria, quantidade_atual, quantidade_minima, localizacao, ativo
 )
