@@ -4,21 +4,30 @@ import com.equipe.estoque.dto.ferramenta.FerramentaRequestDTO;
 import com.equipe.estoque.dto.ferramenta.FerramentaResponseDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaRequestDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaResponseDTO;
+import com.equipe.estoque.security.AuthenticatedAccount;
+import com.equipe.estoque.security.OrganizationAuthorization;
 import com.equipe.estoque.service.FerramentaService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.ArraySchema;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -27,8 +36,11 @@ import java.util.List;
 @RequiredArgsConstructor
 @Validated
 @Tag(name = "Ferramentas")
+@SecurityRequirement(name = "bearerAuth")
 @ApiResponses({
         @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+        @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+        @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
         @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
         @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
         @ApiResponse(responseCode = "500", ref = "#/components/responses/InternalError")
@@ -36,132 +48,146 @@ import java.util.List;
 public class FerramentaController {
 
     private final FerramentaService ferramentaService;
+    private final AuthenticatedAccount authenticatedAccount;
 
     @PostMapping
-    @Operation(summary = "Criar ferramenta", description = "Cadastra uma ferramenta inicialmente disponível.")
-    @ApiResponse(responseCode = "201", description = "Ferramenta criada",
-            content = @Content(schema = @Schema(implementation = FerramentaResponseDTO.class)))
-    public ResponseEntity<FerramentaResponseDTO> criar(@Valid @RequestBody FerramentaRequestDTO dto) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(ferramentaService.criar(dto));
+    @PreAuthorize("@organizationAuthorization.canAdmin(#organizacaoId, authentication)")
+    @Operation(summary = "Criar ferramenta")
+    public ResponseEntity<FerramentaResponseDTO> criar(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
+            @Valid @RequestBody FerramentaRequestDTO dto
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ferramentaService.criar(organizacaoId, dto));
     }
 
     @GetMapping
+    @PreAuthorize("@organizationAuthorization.canRead(#organizacaoId, authentication)")
     @Operation(summary = "Listar ferramentas")
-    @ApiResponse(responseCode = "200", description = "Lista retornada",
-            content = @Content(array = @ArraySchema(schema = @Schema(implementation = FerramentaResponseDTO.class))))
-    public ResponseEntity<List<FerramentaResponseDTO>> listarTodas() {
-        return ResponseEntity.ok(ferramentaService.listarTodas());
+    public ResponseEntity<List<FerramentaResponseDTO>> listarTodas(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId
+    ) {
+        return ResponseEntity.ok(ferramentaService.listarTodas(organizacaoId));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@organizationAuthorization.canRead(#organizacaoId, authentication)")
     @Operation(summary = "Buscar ferramenta por ID")
-    @ApiResponse(responseCode = "200", description = "Ferramenta encontrada",
-            content = @Content(schema = @Schema(implementation = FerramentaResponseDTO.class)))
-    public ResponseEntity<FerramentaResponseDTO> buscarPorId(@PathVariable @Positive Long id) {
-        return ResponseEntity.ok(ferramentaService.buscarPorId(id));
+    public ResponseEntity<FerramentaResponseDTO> buscarPorId(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
+            @PathVariable @Positive Long id
+    ) {
+        return ResponseEntity.ok(ferramentaService.buscarPorId(organizacaoId, id));
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Atualizar ferramenta", description = "Atualiza somente dados cadastrais, sem alterar o estado.")
-    @ApiResponse(responseCode = "200", description = "Ferramenta atualizada",
-            content = @Content(schema = @Schema(implementation = FerramentaResponseDTO.class)))
+    @PreAuthorize("@organizationAuthorization.canAdmin(#organizacaoId, authentication)")
+    @Operation(summary = "Atualizar ferramenta")
     public ResponseEntity<FerramentaResponseDTO> atualizar(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
             @PathVariable @Positive Long id,
             @Valid @RequestBody FerramentaRequestDTO dto
     ) {
-        return ResponseEntity.ok(ferramentaService.atualizar(id, dto));
+        return ResponseEntity.ok(ferramentaService.atualizar(organizacaoId, id, dto));
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Inativar ferramenta", description = "Bloqueia novas operações; ferramenta emprestada deve ser devolvida antes.")
-    @ApiResponse(responseCode = "204", description = "Ferramenta inativada", content = @Content)
-    public ResponseEntity<Void> inativar(@PathVariable @Positive Long id) {
-        ferramentaService.inativar(id);
+    @PreAuthorize("@organizationAuthorization.canAdmin(#organizacaoId, authentication)")
+    @Operation(summary = "Inativar ferramenta")
+    public ResponseEntity<Void> inativar(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
+            @PathVariable @Positive Long id
+    ) {
+        ferramentaService.inativar(organizacaoId, id);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/retirada")
-    @Operation(summary = "Retirar ferramenta", description = "Muda DISPONIVEL para EMPRESTADA e registra o responsável atual.")
-    @ApiResponse(responseCode = "201", description = "Retirada registrada",
-            content = @Content(schema = @Schema(implementation = MovimentacaoFerramentaResponseDTO.class)))
+    @PreAuthorize("@organizationAuthorization.canOperate(#organizacaoId, authentication)")
+    @Operation(summary = "Retirar ferramenta", description = "A autoria e o responsável são a conta autenticada.")
     public ResponseEntity<MovimentacaoFerramentaResponseDTO> registrarRetirada(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
             @PathVariable @Positive Long id,
             @Valid @RequestBody MovimentacaoFerramentaRequestDTO dto
     ) {
-        return created(ferramentaService.registrarRetirada(id, dto));
+        return created(ferramentaService.registrarRetirada(
+                organizacaoId, id, authenticatedAccount.id(), dto));
     }
 
     @PostMapping("/{id}/devolucao")
-    @Operation(summary = "Devolver ferramenta", description = "Muda EMPRESTADA para DISPONIVEL e remove o responsável atual.")
-    @ApiResponse(responseCode = "201", description = "Devolução registrada",
-            content = @Content(schema = @Schema(implementation = MovimentacaoFerramentaResponseDTO.class)))
+    @PreAuthorize("@organizationAuthorization.canOperate(#organizacaoId, authentication)")
+    @Operation(summary = "Devolver ferramenta", description = "A autoria é sempre a conta autenticada.")
     public ResponseEntity<MovimentacaoFerramentaResponseDTO> registrarDevolucao(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
             @PathVariable @Positive Long id,
             @Valid @RequestBody MovimentacaoFerramentaRequestDTO dto
     ) {
-        return created(ferramentaService.registrarDevolucao(id, dto));
+        return created(ferramentaService.registrarDevolucao(
+                organizacaoId, id, authenticatedAccount.id(), dto));
     }
 
     @PostMapping("/{id}/manutencao")
-    @Operation(summary = "Enviar para manutenção", description = "Muda para MANUTENCAO e remove o responsável atual.")
-    @ApiResponse(responseCode = "201", description = "Manutenção registrada",
-            content = @Content(schema = @Schema(implementation = MovimentacaoFerramentaResponseDTO.class)))
+    @PreAuthorize("@organizationAuthorization.canOperate(#organizacaoId, authentication)")
+    @Operation(summary = "Enviar para manutenção", description = "A autoria é sempre a conta autenticada.")
     public ResponseEntity<MovimentacaoFerramentaResponseDTO> registrarManutencao(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
             @PathVariable @Positive Long id,
             @Valid @RequestBody MovimentacaoFerramentaRequestDTO dto
     ) {
-        return created(ferramentaService.registrarManutencao(id, dto));
+        return created(ferramentaService.registrarManutencao(
+                organizacaoId, id, authenticatedAccount.id(), dto));
     }
 
     @PostMapping("/{id}/perda")
-    @Operation(summary = "Registrar perda", description = "Muda para PERDIDA e remove o responsável atual.")
-    @ApiResponse(responseCode = "201", description = "Perda registrada",
-            content = @Content(schema = @Schema(implementation = MovimentacaoFerramentaResponseDTO.class)))
+    @PreAuthorize("@organizationAuthorization.canOperate(#organizacaoId, authentication)")
+    @Operation(summary = "Registrar perda", description = "A autoria é sempre a conta autenticada.")
     public ResponseEntity<MovimentacaoFerramentaResponseDTO> registrarPerda(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
             @PathVariable @Positive Long id,
             @Valid @RequestBody MovimentacaoFerramentaRequestDTO dto
     ) {
-        return created(ferramentaService.registrarPerda(id, dto));
+        return created(ferramentaService.registrarPerda(
+                organizacaoId, id, authenticatedAccount.id(), dto));
     }
 
     @PostMapping("/{id}/correcao")
-    @Operation(summary = "Corrigir estado", description = "Corrige para DISPONIVEL, MANUTENCAO ou PERDIDA com justificativa. "
-            + "EMPRESTADA exige o fluxo de retirada.")
-    @ApiResponse(responseCode = "201", description = "Correção registrada",
-            content = @Content(schema = @Schema(implementation = MovimentacaoFerramentaResponseDTO.class)))
+    @PreAuthorize("@organizationAuthorization.canAdmin(#organizacaoId, authentication)")
+    @Operation(summary = "Corrigir estado", description = "Exclusiva de ADMIN; autoria da conta autenticada.")
     public ResponseEntity<MovimentacaoFerramentaResponseDTO> registrarCorrecao(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
             @PathVariable @Positive Long id,
             @Valid @RequestBody MovimentacaoFerramentaRequestDTO dto
     ) {
-        return created(ferramentaService.registrarCorrecao(id, dto));
+        return created(ferramentaService.registrarCorrecao(
+                organizacaoId, id, authenticatedAccount.id(), dto));
     }
 
     @GetMapping("/{id}/historico")
-    @Operation(summary = "Consultar histórico da ferramenta", description = "Retorna operações da mais recente para a mais antiga.")
-    @ApiResponse(responseCode = "200", description = "Histórico retornado",
-            content = @Content(array = @ArraySchema(schema = @Schema(implementation = MovimentacaoFerramentaResponseDTO.class))))
+    @PreAuthorize("@organizationAuthorization.canRead(#organizacaoId, authentication)")
+    @Operation(summary = "Consultar histórico da ferramenta")
     public ResponseEntity<List<MovimentacaoFerramentaResponseDTO>> consultarHistorico(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
             @PathVariable @Positive Long id
     ) {
-        return ResponseEntity.ok(ferramentaService.consultarHistorico(id));
+        return ResponseEntity.ok(ferramentaService.consultarHistorico(organizacaoId, id));
     }
 
     @GetMapping("/emprestadas")
+    @PreAuthorize("@organizationAuthorization.canRead(#organizacaoId, authentication)")
     @Operation(summary = "Listar ferramentas emprestadas")
-    @ApiResponse(responseCode = "200", description = "Ferramentas emprestadas",
-            content = @Content(array = @ArraySchema(schema = @Schema(implementation = FerramentaResponseDTO.class))))
-    public ResponseEntity<List<FerramentaResponseDTO>> listarEmprestadas() {
-        return ResponseEntity.ok(ferramentaService.listarEmprestadas());
+    public ResponseEntity<List<FerramentaResponseDTO>> listarEmprestadas(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId
+    ) {
+        return ResponseEntity.ok(ferramentaService.listarEmprestadas(organizacaoId));
     }
 
     @GetMapping("/{id}/ultimo-responsavel")
-    @Operation(summary = "Consultar último responsável", description = "Retorna a retirada mais recente, mesmo após devolução.")
-    @ApiResponse(responseCode = "200", description = "Última retirada encontrada",
-            content = @Content(schema = @Schema(implementation = MovimentacaoFerramentaResponseDTO.class)))
+    @PreAuthorize("@organizationAuthorization.canRead(#organizacaoId, authentication)")
+    @Operation(summary = "Consultar último responsável")
     public ResponseEntity<MovimentacaoFerramentaResponseDTO> consultarUltimoResponsavel(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
             @PathVariable @Positive Long id
     ) {
-        return ResponseEntity.ok(ferramentaService.consultarUltimoResponsavel(id));
+        return ResponseEntity.ok(ferramentaService.consultarUltimoResponsavel(organizacaoId, id));
     }
 
     private ResponseEntity<MovimentacaoFerramentaResponseDTO> created(

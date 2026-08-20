@@ -139,16 +139,16 @@ class OrganizationDataIsolationIntegrationTest {
         ).getId();
 
         MovimentacaoEstoqueRequestDTO estoqueRequest = new MovimentacaoEstoqueRequestDTO();
-        estoqueRequest.setUsuarioId(usuario.getId());
         estoqueRequest.setQuantidade(2);
         estoqueRequest.setObservacao("Entrada isolada");
         assertThrows(
                 ResourceNotFoundException.class,
                 () -> itemEstoqueService.registrarEntrada(
-                        organizacaoB.getId(), itemAId, estoqueRequest
+                        organizacaoB.getId(), itemAId, usuario.getId(), estoqueRequest
                 )
         );
-        itemEstoqueService.registrarEntrada(organizacaoA.getId(), itemAId, estoqueRequest);
+        itemEstoqueService.registrarEntrada(
+                organizacaoA.getId(), itemAId, usuario.getId(), estoqueRequest);
         assertEquals(1, movimentacaoEstoqueRepository
                 .findAllByOrganizacaoId(organizacaoA.getId()).size());
         assertEquals(0, movimentacaoEstoqueRepository
@@ -156,16 +156,15 @@ class OrganizationDataIsolationIntegrationTest {
 
         MovimentacaoFerramentaRequestDTO ferramentaRequest =
                 new MovimentacaoFerramentaRequestDTO();
-        ferramentaRequest.setUsuarioId(usuario.getId());
         ferramentaRequest.setObservacao("Retirada isolada");
         assertThrows(
                 ResourceNotFoundException.class,
                 () -> ferramentaService.registrarRetirada(
-                        organizacaoB.getId(), ferramentaAId, ferramentaRequest
+                        organizacaoB.getId(), ferramentaAId, usuario.getId(), ferramentaRequest
                 )
         );
         ferramentaService.registrarRetirada(
-                organizacaoA.getId(), ferramentaAId, ferramentaRequest
+                organizacaoA.getId(), ferramentaAId, usuario.getId(), ferramentaRequest
         );
         assertEquals(1, movimentacaoFerramentaRepository
                 .findAllByOrganizacaoId(organizacaoA.getId()).size());
@@ -188,8 +187,8 @@ class OrganizationDataIsolationIntegrationTest {
 
     @Test
     void deveValidarSchemaV4ComHibernateEFlywayNoSQLite() {
-        assertEquals("4", flyway.info().current().getVersion().toString());
-        assertEquals(List.of("1", "2", "3", "4"), jdbcTemplate.queryForList("""
+        assertEquals("5", flyway.info().current().getVersion().toString());
+        assertEquals(List.of("1", "2", "3", "4", "5"), jdbcTemplate.queryForList("""
                 SELECT version
                   FROM flyway_schema_history
                  WHERE version IS NOT NULL

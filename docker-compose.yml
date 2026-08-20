@@ -26,10 +26,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: postgresql
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-postgresql,prod}
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-estoque_db}
       DB_USERNAME: ${POSTGRES_USER:-estoque}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?Defina APP_JWT_SECRET Base64 com ao menos 32 bytes no arquivo .env}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
       LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT:-INFO}
       LOG_LEVEL_APP: ${LOG_LEVEL_APP:-INFO}

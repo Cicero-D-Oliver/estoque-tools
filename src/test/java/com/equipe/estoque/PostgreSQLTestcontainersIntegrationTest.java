@@ -1,6 +1,8 @@
 package com.equipe.estoque;
 
 import com.equipe.estoque.dto.ferramenta.FerramentaRequestDTO;
+import com.equipe.estoque.dto.auth.AccessTokenResponseDTO;
+import com.equipe.estoque.dto.auth.RegisterRequestDTO;
 import com.equipe.estoque.dto.item.ItemEstoqueRequestDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoEstoqueRequestDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaRequestDTO;
@@ -18,6 +20,8 @@ import com.equipe.estoque.exception.ResourceNotFoundException;
 import com.equipe.estoque.repository.FerramentaRepository;
 import com.equipe.estoque.repository.ItemEstoqueRepository;
 import com.equipe.estoque.repository.OrganizacaoMembroRepository;
+import com.equipe.estoque.repository.UsuarioRepository;
+import com.equipe.estoque.service.AuthService;
 import com.equipe.estoque.service.FerramentaService;
 import com.equipe.estoque.service.ItemEstoqueService;
 import com.equipe.estoque.service.OrganizacaoService;
@@ -35,6 +39,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -72,6 +77,8 @@ class PostgreSQLTestcontainersIntegrationTest {
         registry.add("spring.datasource.url", POSTGRESQL::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRESQL::getUsername);
         registry.add("spring.datasource.password", POSTGRESQL::getPassword);
+        registry.add("app.security.jwt-secret",
+                () -> "dGVzdC1vbmx5LWp3dC1zaWduaW5nLWtleS0zMi1iISE=");
     }
 
     @Autowired
@@ -107,6 +114,15 @@ class PostgreSQLTestcontainersIntegrationTest {
     @Autowired
     private FerramentaService ferramentaService;
 
+    @Autowired
+    private AuthService authService;
+
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @Test
     void deveValidarAplicacaoComPostgresqlReal() {
         assertTrue(POSTGRESQL.isRunning());
@@ -119,12 +135,12 @@ class PostgreSQLTestcontainersIntegrationTest {
                  WHERE version IS NOT NULL
                  ORDER BY installed_rank
                 """);
-        assertEquals(List.of("1", "2", "3", "4"), migrations.stream()
+        assertEquals(List.of("1", "2", "3", "4", "5"), migrations.stream()
                 .map(migration -> migration.get("version").toString())
                 .toList());
         assertTrue(migrations.stream()
                 .allMatch(migration -> Boolean.TRUE.equals(migration.get("success"))));
-        assertEquals("4", flyway.info().current().getVersion().toString());
+        assertEquals("5", flyway.info().current().getVersion().toString());
         assertEquals(2, jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                   FROM information_schema.tables
@@ -256,28 +272,27 @@ class PostgreSQLTestcontainersIntegrationTest {
         );
 
         MovimentacaoEstoqueRequestDTO estoqueRequest = new MovimentacaoEstoqueRequestDTO();
-        estoqueRequest.setUsuarioId(usuario.getId());
         estoqueRequest.setQuantidade(1);
         estoqueRequest.setObservacao("Operação válida");
-        itemEstoqueService.registrarEntrada(organizacaoA.getId(), itemAId, estoqueRequest);
+        itemEstoqueService.registrarEntrada(
+                organizacaoA.getId(), itemAId, usuario.getId(), estoqueRequest);
         assertThrows(
                 ResourceNotFoundException.class,
                 () -> itemEstoqueService.registrarEntrada(
-                        organizacaoB.getId(), itemAId, estoqueRequest
+                        organizacaoB.getId(), itemAId, usuario.getId(), estoqueRequest
                 )
         );
 
         MovimentacaoFerramentaRequestDTO ferramentaMovimento =
                 new MovimentacaoFerramentaRequestDTO();
-        ferramentaMovimento.setUsuarioId(usuario.getId());
         ferramentaMovimento.setObservacao("Operação válida");
         ferramentaService.registrarRetirada(
-                organizacaoA.getId(), ferramentaAId, ferramentaMovimento
+                organizacaoA.getId(), ferramentaAId, usuario.getId(), ferramentaMovimento
         );
         assertThrows(
                 ResourceNotFoundException.class,
                 () -> ferramentaService.registrarRetirada(
-                        organizacaoB.getId(), ferramentaAId, ferramentaMovimento
+                        organizacaoB.getId(), ferramentaAId, usuario.getId(), ferramentaMovimento
                 )
         );
 
@@ -327,6 +342,58 @@ class PostgreSQLTestcontainersIntegrationTest {
                     organizacao_id, patrimonio, nome, status, ativo
                 ) VALUES (?, 'CONSTRAINT-PAT', 'Duplicada', 'DISPONIVEL', TRUE)
                 """, organizacaoA.getId()));
+    }
+
+    @Test
+    void deveValidarCredencialHashETokenNoPostgresqlReal() {
+        RegisterRequestDTO request = new RegisterRequestDTO();
+        request.setNome("Conta PostgreSQL Segura");
+        request.setEmail("conta-segura-postgresql@example.com");
+        request.setSenha("SenhaPostgreSQL!2026");
+        Long accountId = authService.register(request).getId();
+
+        var login = new com.equipe.estoque.dto.auth.LoginRequestDTO();
+        login.setEmail(request.getEmail());
+        login.setSenha(request.getSenha());
+        AccessTokenResponseDTO token = authService.login(login);
+        String hash = usuarioRepository.findById(accountId).orElseThrow().getSenhaHash();
+
+        assertNotNull(token.getAccessToken());
+        assertTrue(token.getExpiresIn() > 0);
+        assertTrue(hash.startsWith("$2"));
+        assertTrue(passwordEncoder.matches(request.getSenha(), hash));
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM usuarios
+                 WHERE id = ? AND senha_hash IS NOT NULL AND senha_alterada_em IS NOT NULL
+                """, Integer.class, accountId));
+    }
+
+    @Test
+    void deveMigrarSchemaPostgresqlPopuladoDeV4ParaV5SemInventarCredencial() throws Exception {
+        String schema = "legacy_v4_to_v5";
+        flywayForSchema(schema, "4").migrate();
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO usuarios (id, nome, email, perfil, ativo, versao)
+                    VALUES (701, 'Legado V4', 'legado-v5@example.com', 'CONSULTA', TRUE, 9)
+                    """);
+        }
+
+        flywayForSchema(schema, null).migrate();
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            assertEquals(1, scalar(statement, "SELECT COUNT(*) FROM usuarios WHERE id = 701"));
+            assertEquals(9, scalar(statement, "SELECT versao FROM usuarios WHERE id = 701"));
+            assertEquals(1, scalar(statement, """
+                    SELECT COUNT(*) FROM usuarios
+                     WHERE id = 701
+                       AND senha_hash IS NULL
+                       AND senha_alterada_em IS NULL
+                       AND ultimo_login_em IS NULL
+                    """));
+            assertEquals(List.of("1", "2", "3", "4", "5"), historyVersions(statement));
+        }
     }
 
     @Test
@@ -407,7 +474,7 @@ class PostgreSQLTestcontainersIntegrationTest {
             assertEquals(5, scalar(statement, """
                     SELECT versao FROM ferramentas WHERE id = 301
                     """));
-            assertEquals(List.of("1", "2", "3", "4"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5"), historyVersions(statement));
         }
     }
 

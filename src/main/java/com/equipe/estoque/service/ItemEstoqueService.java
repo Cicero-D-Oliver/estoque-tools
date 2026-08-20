@@ -123,19 +123,15 @@ public class ItemEstoqueService {
     }
 
     @Transactional
-    public MovimentacaoEstoqueResponseDTO registrarEntrada(Long itemId, MovimentacaoEstoqueRequestDTO dto) {
-        return registrarEntrada(idOrganizacaoLegadaOuNaoEncontrada(), itemId, dto);
-    }
-
-    @Transactional
     public MovimentacaoEstoqueResponseDTO registrarEntrada(
             Long organizacaoId,
             Long itemId,
+            Long executorUsuarioId,
             MovimentacaoEstoqueRequestDTO dto
     ) {
         validarQuantidadePositiva(dto.getQuantidade());
         ItemEstoque item = buscarItemAtivo(organizacaoId, itemId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
+        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
 
         long novoSaldo = (long) item.getQuantidadeAtual() + dto.getQuantidade();
         if (novoSaldo > MAX_STOCK) {
@@ -152,19 +148,15 @@ public class ItemEstoqueService {
     }
 
     @Transactional
-    public MovimentacaoEstoqueResponseDTO registrarSaida(Long itemId, MovimentacaoEstoqueRequestDTO dto) {
-        return registrarSaida(idOrganizacaoLegadaOuNaoEncontrada(), itemId, dto);
-    }
-
-    @Transactional
     public MovimentacaoEstoqueResponseDTO registrarSaida(
             Long organizacaoId,
             Long itemId,
+            Long executorUsuarioId,
             MovimentacaoEstoqueRequestDTO dto
     ) {
         validarQuantidadePositiva(dto.getQuantidade());
         ItemEstoque item = buscarItemAtivo(organizacaoId, itemId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
+        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
 
         if (item.getQuantidadeAtual() < dto.getQuantidade()) {
             throw new BusinessException("Quantidade insuficiente em estoque. Disponível: "
@@ -181,19 +173,15 @@ public class ItemEstoqueService {
     }
 
     @Transactional
-    public MovimentacaoEstoqueResponseDTO registrarCorrecao(Long itemId, MovimentacaoEstoqueRequestDTO dto) {
-        return registrarCorrecao(idOrganizacaoLegadaOuNaoEncontrada(), itemId, dto);
-    }
-
-    @Transactional
     public MovimentacaoEstoqueResponseDTO registrarCorrecao(
             Long organizacaoId,
             Long itemId,
+            Long executorUsuarioId,
             MovimentacaoEstoqueRequestDTO dto
     ) {
         String observacao = requireObservation(dto.getObservacao());
         ItemEstoque item = buscarItemAtivo(organizacaoId, itemId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
+        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
 
         int quantidadeAnterior = item.getQuantidadeAtual();
         int novaQuantidade = dto.getQuantidade();

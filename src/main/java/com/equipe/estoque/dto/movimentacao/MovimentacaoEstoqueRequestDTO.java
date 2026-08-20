@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -14,9 +13,9 @@ import lombok.Setter;
 @Schema(name = "MovimentacaoEstoqueRequest", description = "Entrada, saída ou correção de saldo")
 public class MovimentacaoEstoqueRequestDTO {
 
-    @NotNull(message = "ID do usuário responsável é obrigatório")
-    @Positive(message = "ID do usuário deve ser positivo")
-    @Schema(description = "Usuário ativo que registra a operação", example = "1")
+    @Deprecated
+    @Schema(description = "Campo legado aceito por compatibilidade e ignorado; a autoria vem do token",
+            example = "1", deprecated = true)
     private Long usuarioId;
 
     @NotNull(message = "Quantidade é obrigatória")

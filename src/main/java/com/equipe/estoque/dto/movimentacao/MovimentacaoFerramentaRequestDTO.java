@@ -2,8 +2,6 @@ package com.equipe.estoque.dto.movimentacao;
 
 import com.equipe.estoque.enums.StatusFerramenta;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,9 +11,9 @@ import lombok.Setter;
 @Schema(name = "MovimentacaoFerramentaRequest", description = "Operação que altera o estado de uma ferramenta")
 public class MovimentacaoFerramentaRequestDTO {
 
-    @NotNull(message = "ID do usuário responsável é obrigatório")
-    @Positive(message = "ID do usuário deve ser positivo")
-    @Schema(description = "Usuário ativo que registra a operação", example = "1")
+    @Deprecated
+    @Schema(description = "Campo legado aceito por compatibilidade e ignorado; a autoria vem do token",
+            example = "1", deprecated = true)
     private Long usuarioId;
 
     @Schema(description = "Novo estado, usado somente em correção", example = "DISPONIVEL")
