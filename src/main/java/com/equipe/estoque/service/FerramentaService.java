@@ -6,6 +6,7 @@ import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaRequestDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaResponseDTO;
 import com.equipe.estoque.entity.Ferramenta;
 import com.equipe.estoque.entity.MovimentacaoFerramenta;
+import com.equipe.estoque.entity.Organizacao;
 import com.equipe.estoque.entity.Usuario;
 import com.equipe.estoque.enums.StatusFerramenta;
 import com.equipe.estoque.enums.TipoMovimentacaoFerramenta;
@@ -29,15 +30,23 @@ public class FerramentaService {
     private final FerramentaRepository ferramentaRepository;
     private final MovimentacaoFerramentaRepository movimentacaoFerramentaRepository;
     private final UsuarioService usuarioService;
+    private final OrganizacaoService organizacaoService;
 
     @Transactional
     public FerramentaResponseDTO criar(FerramentaRequestDTO dto) {
+        return criar(organizacaoService.obterOuCriarOrganizacaoLegada().getId(), dto);
+    }
+
+    @Transactional
+    public FerramentaResponseDTO criar(Long organizacaoId, FerramentaRequestDTO dto) {
+        Organizacao organizacao = organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
         String patrimonio = dto.getPatrimonio().trim();
-        if (ferramentaRepository.existsByPatrimonio(patrimonio)) {
+        if (ferramentaRepository.existsByPatrimonioAndOrganizacaoId(patrimonio, organizacaoId)) {
             throw new BusinessException("Já existe uma ferramenta com esse patrimônio");
         }
 
         Ferramenta ferramenta = Ferramenta.builder()
+                .organizacao(organizacao)
                 .patrimonio(patrimonio)
                 .nome(dto.getNome().trim())
                 .categoria(trimNullable(dto.getCategoria()))
@@ -47,25 +56,42 @@ public class FerramentaService {
                 .build();
 
         ferramenta = ferramentaRepository.save(ferramenta);
-        log.info("Ferramenta criada id={}", ferramenta.getId());
+        log.info("Ferramenta criada id={} organizacaoId={}", ferramenta.getId(), organizacaoId);
         return paraResponseDTO(ferramenta);
     }
 
     public List<FerramentaResponseDTO> listarTodas() {
-        return ferramentaRepository.findAll().stream().map(this::paraResponseDTO).toList();
+        return organizacaoService.buscarIdOrganizacaoLegada()
+                .map(this::listarTodas)
+                .orElseGet(List::of);
+    }
+
+    public List<FerramentaResponseDTO> listarTodas(Long organizacaoId) {
+        organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
+        return ferramentaRepository.findAllByOrganizacaoId(organizacaoId)
+                .stream().map(this::paraResponseDTO).toList();
     }
 
     public FerramentaResponseDTO buscarPorId(Long id) {
-        return paraResponseDTO(buscarEntidadePorId(id));
+        return paraResponseDTO(buscarEntidadeLegadaPorId(id));
+    }
+
+    public FerramentaResponseDTO buscarPorId(Long organizacaoId, Long id) {
+        return paraResponseDTO(buscarEntidadePorId(organizacaoId, id));
     }
 
     @Transactional
     public FerramentaResponseDTO atualizar(Long id, FerramentaRequestDTO dto) {
-        Ferramenta ferramenta = buscarEntidadePorId(id);
+        return atualizar(idOrganizacaoLegadaOuNaoEncontrada(), id, dto);
+    }
+
+    @Transactional
+    public FerramentaResponseDTO atualizar(Long organizacaoId, Long id, FerramentaRequestDTO dto) {
+        Ferramenta ferramenta = buscarEntidadePorId(organizacaoId, id);
         String patrimonio = dto.getPatrimonio().trim();
 
         if (!ferramenta.getPatrimonio().equals(patrimonio)
-                && ferramentaRepository.existsByPatrimonio(patrimonio)) {
+                && ferramentaRepository.existsByPatrimonioAndOrganizacaoId(patrimonio, organizacaoId)) {
             throw new BusinessException("Já existe uma ferramenta com esse patrimônio");
         }
 
@@ -75,19 +101,24 @@ public class FerramentaService {
         ferramenta.setLocalizacao(trimNullable(dto.getLocalizacao()));
 
         ferramenta = ferramentaRepository.save(ferramenta);
-        log.info("Ferramenta atualizada id={}", ferramenta.getId());
+        log.info("Ferramenta atualizada id={} organizacaoId={}", ferramenta.getId(), organizacaoId);
         return paraResponseDTO(ferramenta);
     }
 
     @Transactional
     public void inativar(Long id) {
-        Ferramenta ferramenta = buscarEntidadePorId(id);
+        inativar(idOrganizacaoLegadaOuNaoEncontrada(), id);
+    }
+
+    @Transactional
+    public void inativar(Long organizacaoId, Long id) {
+        Ferramenta ferramenta = buscarEntidadePorId(organizacaoId, id);
         if (ferramenta.getStatus() == StatusFerramenta.EMPRESTADA) {
             throw new BusinessException("Uma ferramenta emprestada não pode ser inativada antes da devolução");
         }
         ferramenta.setAtivo(false);
         ferramentaRepository.save(ferramenta);
-        log.info("Ferramenta inativada id={}", ferramenta.getId());
+        log.info("Ferramenta inativada id={} organizacaoId={}", ferramenta.getId(), organizacaoId);
     }
 
     @Transactional
@@ -95,7 +126,16 @@ public class FerramentaService {
             Long ferramentaId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
-        Ferramenta ferramenta = buscarFerramentaAtiva(ferramentaId);
+        return registrarRetirada(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId, dto);
+    }
+
+    @Transactional
+    public MovimentacaoFerramentaResponseDTO registrarRetirada(
+            Long organizacaoId,
+            Long ferramentaId,
+            MovimentacaoFerramentaRequestDTO dto
+    ) {
+        Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
         Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
         if (ferramenta.getStatus() != StatusFerramenta.DISPONIVEL) {
             throw new BusinessException("Ferramenta não está disponível para retirada. Status atual: "
@@ -107,7 +147,8 @@ public class FerramentaService {
         ferramentaRepository.save(ferramenta);
         MovimentacaoFerramenta movimentacao = salvarMovimentacao(
                 ferramenta, usuario, TipoMovimentacaoFerramenta.RETIRADA, dto.getObservacao());
-        log.info("Retirada registrada ferramentaId={} usuarioId={}", ferramenta.getId(), usuario.getId());
+        log.info("Retirada registrada ferramentaId={} organizacaoId={} usuarioId={}",
+                ferramenta.getId(), organizacaoId, usuario.getId());
         return paraMovimentacaoResponseDTO(movimentacao);
     }
 
@@ -116,7 +157,16 @@ public class FerramentaService {
             Long ferramentaId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
-        Ferramenta ferramenta = buscarFerramentaAtiva(ferramentaId);
+        return registrarDevolucao(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId, dto);
+    }
+
+    @Transactional
+    public MovimentacaoFerramentaResponseDTO registrarDevolucao(
+            Long organizacaoId,
+            Long ferramentaId,
+            MovimentacaoFerramentaRequestDTO dto
+    ) {
+        Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
         Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
         if (ferramenta.getStatus() != StatusFerramenta.EMPRESTADA) {
             throw new BusinessException("Ferramenta não está emprestada. Status atual: " + ferramenta.getStatus());
@@ -127,7 +177,8 @@ public class FerramentaService {
         ferramentaRepository.save(ferramenta);
         MovimentacaoFerramenta movimentacao = salvarMovimentacao(
                 ferramenta, usuario, TipoMovimentacaoFerramenta.DEVOLUCAO, dto.getObservacao());
-        log.info("Devolução registrada ferramentaId={} usuarioId={}", ferramenta.getId(), usuario.getId());
+        log.info("Devolução registrada ferramentaId={} organizacaoId={} usuarioId={}",
+                ferramenta.getId(), organizacaoId, usuario.getId());
         return paraMovimentacaoResponseDTO(movimentacao);
     }
 
@@ -136,7 +187,16 @@ public class FerramentaService {
             Long ferramentaId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
-        Ferramenta ferramenta = buscarFerramentaAtiva(ferramentaId);
+        return registrarManutencao(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId, dto);
+    }
+
+    @Transactional
+    public MovimentacaoFerramentaResponseDTO registrarManutencao(
+            Long organizacaoId,
+            Long ferramentaId,
+            MovimentacaoFerramentaRequestDTO dto
+    ) {
+        Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
         Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
         if (ferramenta.getStatus() == StatusFerramenta.PERDIDA) {
             throw new BusinessException("Ferramenta perdida não pode ser enviada para manutenção");
@@ -150,7 +210,8 @@ public class FerramentaService {
         ferramentaRepository.save(ferramenta);
         MovimentacaoFerramenta movimentacao = salvarMovimentacao(
                 ferramenta, usuario, TipoMovimentacaoFerramenta.MANUTENCAO, dto.getObservacao());
-        log.info("Manutenção registrada ferramentaId={} usuarioId={}", ferramenta.getId(), usuario.getId());
+        log.info("Manutenção registrada ferramentaId={} organizacaoId={} usuarioId={}",
+                ferramenta.getId(), organizacaoId, usuario.getId());
         return paraMovimentacaoResponseDTO(movimentacao);
     }
 
@@ -159,7 +220,16 @@ public class FerramentaService {
             Long ferramentaId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
-        Ferramenta ferramenta = buscarFerramentaAtiva(ferramentaId);
+        return registrarPerda(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId, dto);
+    }
+
+    @Transactional
+    public MovimentacaoFerramentaResponseDTO registrarPerda(
+            Long organizacaoId,
+            Long ferramentaId,
+            MovimentacaoFerramentaRequestDTO dto
+    ) {
+        Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
         Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
         if (ferramenta.getStatus() == StatusFerramenta.PERDIDA) {
             throw new BusinessException("Ferramenta já está marcada como perdida");
@@ -170,12 +240,22 @@ public class FerramentaService {
         ferramentaRepository.save(ferramenta);
         MovimentacaoFerramenta movimentacao = salvarMovimentacao(
                 ferramenta, usuario, TipoMovimentacaoFerramenta.PERDA, dto.getObservacao());
-        log.info("Perda registrada ferramentaId={} usuarioId={}", ferramenta.getId(), usuario.getId());
+        log.info("Perda registrada ferramentaId={} organizacaoId={} usuarioId={}",
+                ferramenta.getId(), organizacaoId, usuario.getId());
         return paraMovimentacaoResponseDTO(movimentacao);
     }
 
     @Transactional
     public MovimentacaoFerramentaResponseDTO registrarCorrecao(
+            Long ferramentaId,
+            MovimentacaoFerramentaRequestDTO dto
+    ) {
+        return registrarCorrecao(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId, dto);
+    }
+
+    @Transactional
+    public MovimentacaoFerramentaResponseDTO registrarCorrecao(
+            Long organizacaoId,
             Long ferramentaId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
@@ -186,7 +266,7 @@ public class FerramentaService {
             throw new BusinessException("Use a retirada para definir o status EMPRESTADA e registrar o responsável");
         }
         String observacao = requireObservation(dto.getObservacao());
-        Ferramenta ferramenta = buscarFerramentaAtiva(ferramentaId);
+        Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
         Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
         StatusFerramenta statusAnterior = ferramenta.getStatus();
         if (statusAnterior == dto.getNovoStatus()) {
@@ -200,43 +280,75 @@ public class FerramentaService {
                 + ", novo: " + dto.getNovoStatus() + ")";
         MovimentacaoFerramenta movimentacao = salvarMovimentacao(
                 ferramenta, usuario, TipoMovimentacaoFerramenta.CORRECAO, auditObservation);
-        log.info("Correção registrada ferramentaId={} usuarioId={} statusAnterior={} novoStatus={}",
-                ferramenta.getId(), usuario.getId(), statusAnterior, dto.getNovoStatus());
+        log.info("Correção registrada ferramentaId={} organizacaoId={} usuarioId={} statusAnterior={} novoStatus={}",
+                ferramenta.getId(), organizacaoId, usuario.getId(), statusAnterior, dto.getNovoStatus());
         return paraMovimentacaoResponseDTO(movimentacao);
     }
 
     public List<MovimentacaoFerramentaResponseDTO> consultarHistorico(Long ferramentaId) {
-        buscarEntidadePorId(ferramentaId);
-        return movimentacaoFerramentaRepository.findByFerramentaIdOrderByDataHoraDescIdDesc(ferramentaId)
+        return consultarHistorico(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId);
+    }
+
+    public List<MovimentacaoFerramentaResponseDTO> consultarHistorico(
+            Long organizacaoId,
+            Long ferramentaId
+    ) {
+        buscarEntidadePorId(organizacaoId, ferramentaId);
+        return movimentacaoFerramentaRepository
+                .findByOrganizacaoIdAndFerramentaIdOrderByDataHoraDescIdDesc(organizacaoId, ferramentaId)
                 .stream().map(this::paraMovimentacaoResponseDTO).toList();
     }
 
     public List<FerramentaResponseDTO> listarEmprestadas() {
-        return ferramentaRepository.findByStatus(StatusFerramenta.EMPRESTADA)
+        return organizacaoService.buscarIdOrganizacaoLegada()
+                .map(this::listarEmprestadas)
+                .orElseGet(List::of);
+    }
+
+    public List<FerramentaResponseDTO> listarEmprestadas(Long organizacaoId) {
+        organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
+        return ferramentaRepository.findByOrganizacaoIdAndStatus(organizacaoId, StatusFerramenta.EMPRESTADA)
                 .stream().map(this::paraResponseDTO).toList();
     }
 
     public MovimentacaoFerramentaResponseDTO consultarUltimoResponsavel(Long ferramentaId) {
-        buscarEntidadePorId(ferramentaId);
+        return consultarUltimoResponsavel(idOrganizacaoLegadaOuNaoEncontrada(), ferramentaId);
+    }
+
+    public MovimentacaoFerramentaResponseDTO consultarUltimoResponsavel(
+            Long organizacaoId,
+            Long ferramentaId
+    ) {
+        buscarEntidadePorId(organizacaoId, ferramentaId);
         MovimentacaoFerramenta ultima = movimentacaoFerramentaRepository
-                .findTopByFerramentaIdAndTipoMovimentacaoOrderByDataHoraDescIdDesc(
-                        ferramentaId, TipoMovimentacaoFerramenta.RETIRADA)
+                .findTopByOrganizacaoIdAndFerramentaIdAndTipoMovimentacaoOrderByDataHoraDescIdDesc(
+                        organizacaoId, ferramentaId, TipoMovimentacaoFerramenta.RETIRADA)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Esta ferramenta ainda não possui registro de retirada"));
         return paraMovimentacaoResponseDTO(ultima);
     }
 
-    public Ferramenta buscarEntidadePorId(Long id) {
-        return ferramentaRepository.findById(id)
+    public Ferramenta buscarEntidadePorId(Long organizacaoId, Long id) {
+        organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
+        return ferramentaRepository.findByIdAndOrganizacaoId(id, organizacaoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Ferramenta com id " + id + " não encontrada"));
     }
 
-    private Ferramenta buscarFerramentaAtiva(Long id) {
-        Ferramenta ferramenta = buscarEntidadePorId(id);
+    private Ferramenta buscarEntidadeLegadaPorId(Long id) {
+        return buscarEntidadePorId(idOrganizacaoLegadaOuNaoEncontrada(), id);
+    }
+
+    private Ferramenta buscarFerramentaAtiva(Long organizacaoId, Long id) {
+        Ferramenta ferramenta = buscarEntidadePorId(organizacaoId, id);
         if (!Boolean.TRUE.equals(ferramenta.getAtivo())) {
             throw new BusinessException("A ferramenta está inativa");
         }
         return ferramenta;
+    }
+
+    private Long idOrganizacaoLegadaOuNaoEncontrada() {
+        return organizacaoService.buscarIdOrganizacaoLegada()
+                .orElseThrow(() -> new ResourceNotFoundException("Organização legada não encontrada"));
     }
 
     private String requireObservation(String value) {
@@ -257,6 +369,7 @@ public class FerramentaService {
             String observacao
     ) {
         return movimentacaoFerramentaRepository.save(MovimentacaoFerramenta.builder()
+                .organizacao(ferramenta.getOrganizacao())
                 .ferramenta(ferramenta).usuario(usuario).tipoMovimentacao(tipo)
                 .observacao(trimNullable(observacao)).build());
     }

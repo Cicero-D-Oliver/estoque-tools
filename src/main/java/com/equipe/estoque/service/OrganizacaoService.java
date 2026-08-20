@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +25,9 @@ import java.time.LocalDateTime;
 public class OrganizacaoService {
 
     private static final int TAMANHO_MAXIMO_NOME = 120;
+    private static final String NOME_ORGANIZACAO_LEGADA = "Organização Legada";
+    private static final LocalDateTime DATA_ORGANIZACAO_LEGADA =
+            LocalDateTime.of(2000, 1, 1, 0, 0);
 
     private final OrganizacaoRepository organizacaoRepository;
     private final OrganizacaoMembroRepository membroRepository;
@@ -60,6 +64,69 @@ public class OrganizacaoService {
 
         log.info("Organização criada id={} criadorUsuarioId={}", organizacao.getId(), criador.getId());
         return organizacao;
+    }
+
+    public Organizacao buscarOrganizacaoAtiva(Long organizacaoId) {
+        return organizacaoRepository.findById(organizacaoId)
+                .filter(organizacao -> Boolean.TRUE.equals(organizacao.getAtiva()))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Organização com id " + organizacaoId + " não encontrada"
+                ));
+    }
+
+    public Optional<Long> buscarIdOrganizacaoLegada() {
+        return buscarOrganizacaoLegada().map(Organizacao::getId);
+    }
+
+    /**
+     * Ponte temporária para os endpoints anteriores à autenticação. Novas
+     * operações internas devem receber o ID da organização explicitamente.
+     */
+    @Transactional
+    public Organizacao obterOuCriarOrganizacaoLegada() {
+        Optional<Organizacao> existente = buscarOrganizacaoLegada();
+        if (existente.isPresent()) {
+            return existente.get();
+        }
+
+        Usuario primeiroUsuario = usuarioRepository.findFirstByOrderByIdAsc()
+                .orElseThrow(() -> new BusinessException(
+                        "Cadastre ao menos um usuário antes de criar dados operacionais"
+                ));
+        Usuario criador = usuarioRepository.findByIdForUpdate(primeiroUsuario.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuário técnico da organização legada não encontrado"
+                ));
+
+        existente = buscarOrganizacaoLegada();
+        if (existente.isPresent()) {
+            return existente.get();
+        }
+
+        Organizacao organizacao = organizacaoRepository.save(Organizacao.builder()
+                .nome(NOME_ORGANIZACAO_LEGADA)
+                .ativa(true)
+                .criadaEm(DATA_ORGANIZACAO_LEGADA)
+                .criadaPorUsuario(criador)
+                .build());
+        membroRepository.save(OrganizacaoMembro.builder()
+                .organizacao(organizacao)
+                .usuario(criador)
+                .perfil(PerfilMembroOrganizacao.valueOf(criador.getPerfil().name()))
+                .status(StatusMembroOrganizacao.ATIVO)
+                .solicitadoEm(DATA_ORGANIZACAO_LEGADA)
+                .aprovadoEm(DATA_ORGANIZACAO_LEGADA)
+                .aprovadoPorUsuario(criador)
+                .build());
+        log.info("Organização legada criada para compatibilidade id={}", organizacao.getId());
+        return organizacao;
+    }
+
+    private Optional<Organizacao> buscarOrganizacaoLegada() {
+        return organizacaoRepository.findByNomeAndCriadaEm(
+                NOME_ORGANIZACAO_LEGADA,
+                DATA_ORGANIZACAO_LEGADA
+        );
     }
 
     private String normalizarNome(String nome) {

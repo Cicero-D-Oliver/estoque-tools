@@ -1,13 +1,25 @@
 package com.equipe.estoque;
 
+import com.equipe.estoque.dto.ferramenta.FerramentaRequestDTO;
+import com.equipe.estoque.dto.item.ItemEstoqueRequestDTO;
+import com.equipe.estoque.dto.movimentacao.MovimentacaoEstoqueRequestDTO;
+import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaRequestDTO;
 import com.equipe.estoque.dto.usuario.UsuarioRequestDTO;
 import com.equipe.estoque.dto.usuario.UsuarioResponseDTO;
+import com.equipe.estoque.entity.Ferramenta;
+import com.equipe.estoque.entity.ItemEstoque;
 import com.equipe.estoque.entity.Organizacao;
 import com.equipe.estoque.entity.OrganizacaoMembro;
 import com.equipe.estoque.enums.PerfilMembroOrganizacao;
 import com.equipe.estoque.enums.PerfilUsuario;
 import com.equipe.estoque.enums.StatusMembroOrganizacao;
+import com.equipe.estoque.exception.BusinessException;
+import com.equipe.estoque.exception.ResourceNotFoundException;
+import com.equipe.estoque.repository.FerramentaRepository;
+import com.equipe.estoque.repository.ItemEstoqueRepository;
 import com.equipe.estoque.repository.OrganizacaoMembroRepository;
+import com.equipe.estoque.service.FerramentaService;
+import com.equipe.estoque.service.ItemEstoqueService;
 import com.equipe.estoque.service.OrganizacaoService;
 import com.equipe.estoque.service.UsuarioService;
 import jakarta.persistence.EntityManagerFactory;
@@ -30,6 +42,10 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
 import java.util.Map;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -79,6 +95,18 @@ class PostgreSQLTestcontainersIntegrationTest {
     @Autowired
     private OrganizacaoMembroRepository membroRepository;
 
+    @Autowired
+    private ItemEstoqueRepository itemEstoqueRepository;
+
+    @Autowired
+    private FerramentaRepository ferramentaRepository;
+
+    @Autowired
+    private ItemEstoqueService itemEstoqueService;
+
+    @Autowired
+    private FerramentaService ferramentaService;
+
     @Test
     void deveValidarAplicacaoComPostgresqlReal() {
         assertTrue(POSTGRESQL.isRunning());
@@ -91,12 +119,12 @@ class PostgreSQLTestcontainersIntegrationTest {
                  WHERE version IS NOT NULL
                  ORDER BY installed_rank
                 """);
-        assertEquals(List.of("1", "2", "3"), migrations.stream()
+        assertEquals(List.of("1", "2", "3", "4"), migrations.stream()
                 .map(migration -> migration.get("version").toString())
                 .toList());
         assertTrue(migrations.stream()
                 .allMatch(migration -> Boolean.TRUE.equals(migration.get("success"))));
-        assertEquals("3", flyway.info().current().getVersion().toString());
+        assertEquals("4", flyway.info().current().getVersion().toString());
         assertEquals(2, jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                   FROM information_schema.tables
@@ -114,6 +142,23 @@ class PostgreSQLTestcontainersIntegrationTest {
                        'fk_organizacao_membros_organizacao',
                        'fk_organizacao_membros_usuario',
                        'fk_organizacao_membros_aprovado_por'
+                   )
+                """, Integer.class));
+        assertEquals(10, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                  FROM information_schema.table_constraints
+                 WHERE table_schema = 'public'
+                   AND constraint_name IN (
+                       'uk_itens_estoque_organizacao_codigo',
+                       'uk_itens_estoque_organizacao_id',
+                       'fk_itens_estoque_organizacao',
+                       'uk_ferramentas_organizacao_patrimonio',
+                       'uk_ferramentas_organizacao_id',
+                       'fk_ferramentas_organizacao',
+                       'fk_mov_estoque_organizacao',
+                       'fk_mov_estoque_item_organizacao',
+                       'fk_mov_ferramenta_organizacao',
+                       'fk_mov_ferramenta_ferramenta_organizacao'
                    )
                 """, Integer.class));
 
@@ -156,5 +201,298 @@ class PostgreSQLTestcontainersIntegrationTest {
                 serverVersion,
                 migrations.stream().map(migration -> migration.get("version")).toList()
         );
+    }
+
+    @Test
+    void deveIsolarOperacoesEUnicidadesPorOrganizacaoNoPostgresql() {
+        UsuarioResponseDTO usuario = criarUsuario(
+                "Isolamento PostgreSQL",
+                "isolamento-postgresql@example.com"
+        );
+        Organizacao organizacaoA = organizacaoService.criar("PostgreSQL A", usuario.getId());
+        Organizacao organizacaoB = organizacaoService.criar("PostgreSQL B", usuario.getId());
+
+        Long itemAId = itemEstoqueService.criar(
+                organizacaoA.getId(), itemRequest("CODIGO-COMPARTILHADO")
+        ).getId();
+        Long itemBId = itemEstoqueService.criar(
+                organizacaoB.getId(), itemRequest("CODIGO-COMPARTILHADO")
+        ).getId();
+        Long ferramentaAId = ferramentaService.criar(
+                organizacaoA.getId(), ferramentaRequest("PATRIMONIO-COMPARTILHADO")
+        ).getId();
+        Long ferramentaBId = ferramentaService.criar(
+                organizacaoB.getId(), ferramentaRequest("PATRIMONIO-COMPARTILHADO")
+        ).getId();
+
+        assertEquals(List.of(itemAId), itemEstoqueService.listarTodos(organizacaoA.getId())
+                .stream().map(item -> item.getId()).toList());
+        assertEquals(List.of(itemBId), itemEstoqueService.listarTodos(organizacaoB.getId())
+                .stream().map(item -> item.getId()).toList());
+        assertEquals(List.of(ferramentaAId), ferramentaService.listarTodas(organizacaoA.getId())
+                .stream().map(ferramenta -> ferramenta.getId()).toList());
+        assertEquals(List.of(ferramentaBId), ferramentaService.listarTodas(organizacaoB.getId())
+                .stream().map(ferramenta -> ferramenta.getId()).toList());
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> itemEstoqueService.buscarPorId(organizacaoB.getId(), itemAId)
+        );
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> ferramentaService.buscarPorId(organizacaoB.getId(), ferramentaAId)
+        );
+        assertThrows(
+                BusinessException.class,
+                () -> itemEstoqueService.criar(
+                        organizacaoA.getId(), itemRequest("CODIGO-COMPARTILHADO")
+                )
+        );
+        assertThrows(
+                BusinessException.class,
+                () -> ferramentaService.criar(
+                        organizacaoA.getId(), ferramentaRequest("PATRIMONIO-COMPARTILHADO")
+                )
+        );
+
+        MovimentacaoEstoqueRequestDTO estoqueRequest = new MovimentacaoEstoqueRequestDTO();
+        estoqueRequest.setUsuarioId(usuario.getId());
+        estoqueRequest.setQuantidade(1);
+        estoqueRequest.setObservacao("Operação válida");
+        itemEstoqueService.registrarEntrada(organizacaoA.getId(), itemAId, estoqueRequest);
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> itemEstoqueService.registrarEntrada(
+                        organizacaoB.getId(), itemAId, estoqueRequest
+                )
+        );
+
+        MovimentacaoFerramentaRequestDTO ferramentaMovimento =
+                new MovimentacaoFerramentaRequestDTO();
+        ferramentaMovimento.setUsuarioId(usuario.getId());
+        ferramentaMovimento.setObservacao("Operação válida");
+        ferramentaService.registrarRetirada(
+                organizacaoA.getId(), ferramentaAId, ferramentaMovimento
+        );
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> ferramentaService.registrarRetirada(
+                        organizacaoB.getId(), ferramentaAId, ferramentaMovimento
+                )
+        );
+
+        ItemEstoque itemA = itemEstoqueRepository
+                .findByIdAndOrganizacaoId(itemAId, organizacaoA.getId()).orElseThrow();
+        Ferramenta ferramentaA = ferramentaRepository
+                .findByIdAndOrganizacaoId(ferramentaAId, organizacaoA.getId()).orElseThrow();
+        assertEquals(organizacaoA.getId(), itemA.getOrganizacao().getId());
+        assertEquals(organizacaoA.getId(), ferramentaA.getOrganizacao().getId());
+    }
+
+    @Test
+    void deveRejeitarRelacoesCruzadasPelasConstraintsDoPostgresql() {
+        UsuarioResponseDTO usuario = criarUsuario(
+                "Constraints PostgreSQL",
+                "constraints-postgresql@example.com"
+        );
+        Organizacao organizacaoA = organizacaoService.criar("Constraints A", usuario.getId());
+        Organizacao organizacaoB = organizacaoService.criar("Constraints B", usuario.getId());
+        Long itemAId = itemEstoqueService.criar(
+                organizacaoA.getId(), itemRequest("CONSTRAINT-ITEM")
+        ).getId();
+        Long ferramentaAId = ferramentaService.criar(
+                organizacaoA.getId(), ferramentaRequest("CONSTRAINT-PAT")
+        ).getId();
+
+        assertThrows(DataAccessException.class, () -> jdbcTemplate.update("""
+                INSERT INTO movimentacoes_estoque (
+                    organizacao_id, item_estoque_id, usuario_id,
+                    tipo_movimentacao, quantidade, data_hora
+                ) VALUES (?, ?, ?, 'ENTRADA', 1, CURRENT_TIMESTAMP)
+                """, organizacaoB.getId(), itemAId, usuario.getId()));
+        assertThrows(DataAccessException.class, () -> jdbcTemplate.update("""
+                INSERT INTO movimentacoes_ferramenta (
+                    organizacao_id, ferramenta_id, usuario_id,
+                    tipo_movimentacao, data_hora
+                ) VALUES (?, ?, ?, 'MANUTENCAO', CURRENT_TIMESTAMP)
+                """, organizacaoB.getId(), ferramentaAId, usuario.getId()));
+        assertThrows(DataAccessException.class, () -> jdbcTemplate.update("""
+                INSERT INTO itens_estoque (
+                    organizacao_id, codigo, nome, quantidade_atual,
+                    quantidade_minima, ativo
+                ) VALUES (?, 'CONSTRAINT-ITEM', 'Duplicado', 0, 0, TRUE)
+                """, organizacaoA.getId()));
+        assertThrows(DataAccessException.class, () -> jdbcTemplate.update("""
+                INSERT INTO ferramentas (
+                    organizacao_id, patrimonio, nome, status, ativo
+                ) VALUES (?, 'CONSTRAINT-PAT', 'Duplicada', 'DISPONIVEL', TRUE)
+                """, organizacaoA.getId()));
+    }
+
+    @Test
+    void deveMigrarSchemaPostgresqlPopuladoDeV3ParaV4SemPerderDados() throws Exception {
+        String schema = "legacy_v3_to_v4";
+        Flyway flywayAteV2 = flywayForSchema(schema, "2");
+        flywayAteV2.migrate();
+
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO usuarios (id, nome, email, perfil, ativo, versao)
+                    VALUES (101, 'Legado PostgreSQL', 'legado-v4@example.com', 'OPERADOR', TRUE, 3)
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO itens_estoque (
+                        id, codigo, nome, quantidade_atual, quantidade_minima, ativo, versao
+                    ) VALUES (201, 'LEGADO-PG-ITEM', 'Item legado', 17, 4, TRUE, 2)
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO ferramentas (
+                        id, patrimonio, nome, status, ativo, versao
+                    ) VALUES (301, 'LEGADO-PG-PAT', 'Ferramenta legada', 'DISPONIVEL', TRUE, 5)
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO movimentacoes_estoque (
+                        id, item_estoque_id, usuario_id, tipo_movimentacao,
+                        quantidade, data_hora, observacao
+                    ) VALUES (
+                        401, 201, 101, 'ENTRADA', 17,
+                        TIMESTAMP '2026-08-01 10:00:00', 'Histórico legado'
+                    )
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO movimentacoes_ferramenta (
+                        id, ferramenta_id, usuario_id, tipo_movimentacao,
+                        data_hora, observacao
+                    ) VALUES (
+                        501, 301, 101, 'MANUTENCAO',
+                        TIMESTAMP '2026-08-02 11:00:00', 'Histórico legado'
+                    )
+                    """);
+        }
+
+        flywayForSchema(schema, "3").migrate();
+        Map<String, Integer> countsBefore = operationalCounts(schema);
+        flywayForSchema(schema, null).migrate();
+
+        assertEquals(countsBefore, operationalCounts(schema));
+        assertEquals(Map.of(
+                "usuarios", 1,
+                "itens_estoque", 1,
+                "ferramentas", 1,
+                "movimentacoes_estoque", 1,
+                "movimentacoes_ferramenta", 1
+        ), countsBefore);
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            assertEquals(0, scalar(statement, """
+                    WITH legacy AS (
+                        SELECT id FROM organizacoes
+                         WHERE nome = 'Organização Legada'
+                           AND criada_em = TIMESTAMP '2000-01-01 00:00:00'
+                    )
+                    SELECT
+                        (SELECT COUNT(*) FROM itens_estoque
+                          WHERE organizacao_id NOT IN (SELECT id FROM legacy))
+                      + (SELECT COUNT(*) FROM ferramentas
+                          WHERE organizacao_id NOT IN (SELECT id FROM legacy))
+                      + (SELECT COUNT(*) FROM movimentacoes_estoque
+                          WHERE organizacao_id NOT IN (SELECT id FROM legacy))
+                      + (SELECT COUNT(*) FROM movimentacoes_ferramenta
+                          WHERE organizacao_id NOT IN (SELECT id FROM legacy))
+                    """));
+            assertEquals(17, scalar(statement, """
+                    SELECT quantidade_atual FROM itens_estoque WHERE id = 201
+                    """));
+            assertEquals(5, scalar(statement, """
+                    SELECT versao FROM ferramentas WHERE id = 301
+                    """));
+            assertEquals(List.of("1", "2", "3", "4"), historyVersions(statement));
+        }
+    }
+
+    private Flyway flywayForSchema(String schema, String target) {
+        var configuration = Flyway.configure()
+                .dataSource(
+                        POSTGRESQL.getJdbcUrl(),
+                        POSTGRESQL.getUsername(),
+                        POSTGRESQL.getPassword()
+                )
+                .schemas(schema)
+                .defaultSchema(schema)
+                .locations("classpath:db/migration/postgresql");
+        if (target != null) {
+            configuration.target(target);
+        }
+        return configuration.load();
+    }
+
+    private Connection legacyConnection(String schema) throws Exception {
+        Connection connection = DriverManager.getConnection(
+                POSTGRESQL.getJdbcUrl(),
+                POSTGRESQL.getUsername(),
+                POSTGRESQL.getPassword()
+        );
+        connection.setSchema(schema);
+        return connection;
+    }
+
+    private Map<String, Integer> operationalCounts(String schema) throws Exception {
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            return Map.of(
+                    "usuarios", scalar(statement, "SELECT COUNT(*) FROM usuarios"),
+                    "itens_estoque", scalar(statement, "SELECT COUNT(*) FROM itens_estoque"),
+                    "ferramentas", scalar(statement, "SELECT COUNT(*) FROM ferramentas"),
+                    "movimentacoes_estoque",
+                    scalar(statement, "SELECT COUNT(*) FROM movimentacoes_estoque"),
+                    "movimentacoes_ferramenta",
+                    scalar(statement, "SELECT COUNT(*) FROM movimentacoes_ferramenta")
+            );
+        }
+    }
+
+    private int scalar(Statement statement, String sql) throws Exception {
+        try (ResultSet result = statement.executeQuery(sql)) {
+            result.next();
+            return result.getInt(1);
+        }
+    }
+
+    private List<String> historyVersions(Statement statement) throws Exception {
+        try (ResultSet result = statement.executeQuery("""
+                SELECT version FROM flyway_schema_history
+                 WHERE version IS NOT NULL ORDER BY installed_rank
+                """)) {
+            java.util.ArrayList<String> versions = new java.util.ArrayList<>();
+            while (result.next()) {
+                versions.add(result.getString(1));
+            }
+            return List.copyOf(versions);
+        }
+    }
+
+    private UsuarioResponseDTO criarUsuario(String nome, String email) {
+        UsuarioRequestDTO request = new UsuarioRequestDTO();
+        request.setNome(nome);
+        request.setEmail(email);
+        request.setPerfil(PerfilUsuario.OPERADOR);
+        return usuarioService.criar(request);
+    }
+
+    private ItemEstoqueRequestDTO itemRequest(String codigo) {
+        ItemEstoqueRequestDTO request = new ItemEstoqueRequestDTO();
+        request.setCodigo(codigo);
+        request.setNome("Item PostgreSQL");
+        request.setQuantidadeAtual(0);
+        request.setQuantidadeMinima(0);
+        return request;
+    }
+
+    private FerramentaRequestDTO ferramentaRequest(String patrimonio) {
+        FerramentaRequestDTO request = new FerramentaRequestDTO();
+        request.setPatrimonio(patrimonio);
+        request.setNome("Ferramenta PostgreSQL");
+        return request;
     }
 }

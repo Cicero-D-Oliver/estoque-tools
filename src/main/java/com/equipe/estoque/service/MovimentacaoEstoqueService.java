@@ -26,12 +26,20 @@ import java.util.List;
 public class MovimentacaoEstoqueService {
 
     private final MovimentacaoEstoqueRepository movimentacaoEstoqueRepository;
+    private final OrganizacaoService organizacaoService;
 
     /**
      * Lista todas as movimentações de estoque já registradas no sistema.
      */
     public List<MovimentacaoEstoqueResponseDTO> listarTodas() {
-        return movimentacaoEstoqueRepository.findAll()
+        return organizacaoService.buscarIdOrganizacaoLegada()
+                .map(this::listarTodas)
+                .orElseGet(List::of);
+    }
+
+    public List<MovimentacaoEstoqueResponseDTO> listarTodas(Long organizacaoId) {
+        organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
+        return movimentacaoEstoqueRepository.findAllByOrganizacaoId(organizacaoId)
                 .stream()
                 .map(this::paraResponseDTO)
                 .toList();

@@ -12,6 +12,8 @@ public interface FerramentaRepository extends JpaRepository<Ferramenta, Long> {
 
     boolean existsByPatrimonio(String patrimonio);
 
+    boolean existsByPatrimonioAndOrganizacaoId(String patrimonio, Long organizacaoId);
+
     @Override
     @EntityGraph(attributePaths = "responsavelAtual")
     List<Ferramenta> findAll();
@@ -21,5 +23,14 @@ public interface FerramentaRepository extends JpaRepository<Ferramenta, Long> {
     Optional<Ferramenta> findById(Long id);
 
     @EntityGraph(attributePaths = "responsavelAtual")
+    List<Ferramenta> findAllByOrganizacaoId(Long organizacaoId);
+
+    @EntityGraph(attributePaths = "responsavelAtual")
+    Optional<Ferramenta> findByIdAndOrganizacaoId(Long id, Long organizacaoId);
+
+    @EntityGraph(attributePaths = "responsavelAtual")
     List<Ferramenta> findByStatus(StatusFerramenta status);
+
+    @EntityGraph(attributePaths = "responsavelAtual")
+    List<Ferramenta> findByOrganizacaoIdAndStatus(Long organizacaoId, StatusFerramenta status);
 }

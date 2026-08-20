@@ -13,5 +13,14 @@ public interface MovimentacaoEstoqueRepository extends JpaRepository<Movimentaca
     List<MovimentacaoEstoque> findAll();
 
     @EntityGraph(attributePaths = {"itemEstoque", "usuario"})
+    List<MovimentacaoEstoque> findAllByOrganizacaoId(Long organizacaoId);
+
+    @EntityGraph(attributePaths = {"itemEstoque", "usuario"})
     List<MovimentacaoEstoque> findByItemEstoqueIdOrderByDataHoraDescIdDesc(Long itemEstoqueId);
+
+    @EntityGraph(attributePaths = {"itemEstoque", "usuario"})
+    List<MovimentacaoEstoque> findByOrganizacaoIdAndItemEstoqueIdOrderByDataHoraDescIdDesc(
+            Long organizacaoId,
+            Long itemEstoqueId
+    );
 }

@@ -56,7 +56,7 @@ class SQLiteLegacyBaselineCallbackTest {
     }
 
     @Test
-    void deveAceitarLegadoConhecidoAplicarV2EV3EPreservarDados() throws Exception {
+    void deveAceitarLegadoConhecidoAplicarAteV4EPreservarDados() throws Exception {
         DataSource dataSource = createKnownLegacyDatabase("compatible.db");
         Map<String, String> hashesBefore = canonicalDataHashes(dataSource);
 
@@ -64,11 +64,12 @@ class SQLiteLegacyBaselineCallbackTest {
 
         assertEquals(hashesBefore, canonicalDataHashes(dataSource));
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:BASELINE:1", "2:SQL:1", "3:SQL:1");
+            assertHistory(connection, "1:BASELINE:1", "2:SQL:1", "3:SQL:1", "4:SQL:1");
             assertEquals(7, countApplicationTables(connection));
             assertEquals(1, countRows(connection, "organizacoes"));
             assertEquals(3, countRows(connection, "organizacao_membros"));
             assertEquals(0, countMismatchedLegacyProfiles(connection));
+            assertEquals(0, countOperationalRowsOutsideLegacyOrganization(connection));
             assertEquals(0, foreignKeyViolationCount(connection));
         }
     }
@@ -97,13 +98,13 @@ class SQLiteLegacyBaselineCallbackTest {
     }
 
     @Test
-    void bancoNovoVazioDeveAplicarV1V2EV3SemBaseline() throws Exception {
+    void bancoNovoVazioDeveAplicarV1AteV4SemBaseline() throws Exception {
         DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("empty.db"));
 
         migrate(dataSource, true);
 
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1");
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1");
             assertEquals(7, countApplicationTables(connection));
             assertEquals(0, countRows(connection, "organizacoes"));
             assertEquals(0, foreignKeyViolationCount(connection));
@@ -111,26 +112,55 @@ class SQLiteLegacyBaselineCallbackTest {
     }
 
     @Test
-    void deveMigrarBancoEmV2ParaV3SemPerderUsuarios() throws Exception {
-        DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("v2-to-v3.db"));
+    void deveMigrarBancoParadoEmV3ParaV4SemPerderDadosOperacionais() throws Exception {
+        DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("v3-to-v4.db"));
         migrateToVersion2(dataSource);
         try (Connection connection = dataSource.getConnection()) {
             execute(connection, """
                     INSERT INTO usuarios (id, versao, nome, email, perfil, ativo)
                     VALUES (101, 4, 'Usuário Existente', 'existente@example.com', 'CONSULTA', 1)
                     """);
+            execute(connection, """
+                    INSERT INTO itens_estoque (
+                        id, versao, codigo, nome, quantidade_atual, quantidade_minima, ativo
+                    ) VALUES (201, 3, 'LEGADO-ITEM', 'Item legado', 17, 4, 1)
+                    """);
+            execute(connection, """
+                    INSERT INTO ferramentas (
+                        id, versao, patrimonio, nome, status, ativo
+                    ) VALUES (301, 2, 'LEGADO-PAT', 'Ferramenta legada', 'DISPONIVEL', 1)
+                    """);
+            execute(connection, """
+                    INSERT INTO movimentacoes_estoque (
+                        id, item_estoque_id, usuario_id, tipo_movimentacao,
+                        quantidade, data_hora, observacao
+                    ) VALUES (
+                        401, 201, 101, 'ENTRADA', 17,
+                        '2026-08-01 10:00:00', 'Histórico legado'
+                    )
+                    """);
+            execute(connection, """
+                    INSERT INTO movimentacoes_ferramenta (
+                        id, ferramenta_id, usuario_id, tipo_movimentacao, data_hora, observacao
+                    ) VALUES (
+                        501, 301, 101, 'MANUTENCAO',
+                        '2026-08-02 11:00:00', 'Histórico legado'
+                    )
+                    """);
         }
+        migrateToVersion3(dataSource);
         Map<String, String> hashesBefore = canonicalDataHashes(dataSource);
 
         migrate(dataSource, false);
 
         assertEquals(hashesBefore, canonicalDataHashes(dataSource));
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1");
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1");
             assertEquals(1, countRows(connection, "usuarios"));
             assertEquals(1, countRows(connection, "organizacoes"));
             assertEquals(1, countRows(connection, "organizacao_membros"));
             assertEquals(0, countMismatchedLegacyProfiles(connection));
+            assertEquals(0, countOperationalRowsOutsideLegacyOrganization(connection));
             assertEquals(0, foreignKeyViolationCount(connection));
         }
     }
@@ -254,6 +284,15 @@ class SQLiteLegacyBaselineCallbackTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration/sqlite")
                 .target("2")
+                .load()
+                .migrate();
+    }
+
+    private static void migrateToVersion3(DataSource dataSource) {
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration/sqlite")
+                .target("3")
                 .load()
                 .migrate();
     }
@@ -409,6 +448,30 @@ class SQLiteLegacyBaselineCallbackTest {
                        JOIN usuarios usuario ON usuario.id = membro.usuario_id
                       WHERE membro.perfil <> usuario.perfil
                          OR membro.status <> 'ATIVO'
+                     """)) {
+            return result.getInt(1);
+        }
+    }
+
+    private static int countOperationalRowsOutsideLegacyOrganization(Connection connection)
+            throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("""
+                     WITH legacy AS (
+                         SELECT id
+                           FROM organizacoes
+                          WHERE nome = 'Organização Legada'
+                            AND criada_em = '2000-01-01 00:00:00'
+                     )
+                     SELECT
+                         (SELECT COUNT(*) FROM itens_estoque
+                           WHERE organizacao_id NOT IN (SELECT id FROM legacy))
+                       + (SELECT COUNT(*) FROM ferramentas
+                           WHERE organizacao_id NOT IN (SELECT id FROM legacy))
+                       + (SELECT COUNT(*) FROM movimentacoes_estoque
+                           WHERE organizacao_id NOT IN (SELECT id FROM legacy))
+                       + (SELECT COUNT(*) FROM movimentacoes_ferramenta
+                           WHERE organizacao_id NOT IN (SELECT id FROM legacy))
                      """)) {
             return result.getInt(1);
         }

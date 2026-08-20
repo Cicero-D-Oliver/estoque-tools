@@ -6,6 +6,7 @@ import com.equipe.estoque.dto.movimentacao.MovimentacaoEstoqueRequestDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoEstoqueResponseDTO;
 import com.equipe.estoque.entity.ItemEstoque;
 import com.equipe.estoque.entity.MovimentacaoEstoque;
+import com.equipe.estoque.entity.Organizacao;
 import com.equipe.estoque.entity.Usuario;
 import com.equipe.estoque.enums.TipoMovimentacaoEstoque;
 import com.equipe.estoque.exception.BusinessException;
@@ -30,15 +31,23 @@ public class ItemEstoqueService {
     private final ItemEstoqueRepository itemEstoqueRepository;
     private final MovimentacaoEstoqueRepository movimentacaoEstoqueRepository;
     private final UsuarioService usuarioService;
+    private final OrganizacaoService organizacaoService;
 
     @Transactional
     public ItemEstoqueResponseDTO criar(ItemEstoqueRequestDTO dto) {
+        return criar(organizacaoService.obterOuCriarOrganizacaoLegada().getId(), dto);
+    }
+
+    @Transactional
+    public ItemEstoqueResponseDTO criar(Long organizacaoId, ItemEstoqueRequestDTO dto) {
+        Organizacao organizacao = organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
         String codigo = dto.getCodigo().trim();
-        if (itemEstoqueRepository.existsByCodigo(codigo)) {
+        if (itemEstoqueRepository.existsByCodigoAndOrganizacaoId(codigo, organizacaoId)) {
             throw new BusinessException("Já existe um item com esse código");
         }
 
         ItemEstoque item = ItemEstoque.builder()
+                .organizacao(organizacao)
                 .codigo(codigo)
                 .nome(dto.getNome().trim())
                 .categoria(trimNullable(dto.getCategoria()))
@@ -49,24 +58,42 @@ public class ItemEstoqueService {
                 .build();
 
         item = itemEstoqueRepository.save(item);
-        log.info("Item criado id={}", item.getId());
+        log.info("Item criado id={} organizacaoId={}", item.getId(), organizacaoId);
         return paraResponseDTO(item);
     }
 
     public List<ItemEstoqueResponseDTO> listarTodos() {
-        return itemEstoqueRepository.findAll().stream().map(this::paraResponseDTO).toList();
+        return organizacaoService.buscarIdOrganizacaoLegada()
+                .map(this::listarTodos)
+                .orElseGet(List::of);
+    }
+
+    public List<ItemEstoqueResponseDTO> listarTodos(Long organizacaoId) {
+        organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
+        return itemEstoqueRepository.findAllByOrganizacaoId(organizacaoId)
+                .stream().map(this::paraResponseDTO).toList();
     }
 
     public ItemEstoqueResponseDTO buscarPorId(Long id) {
-        return paraResponseDTO(buscarEntidadePorId(id));
+        return paraResponseDTO(buscarEntidadeLegadaPorId(id));
+    }
+
+    public ItemEstoqueResponseDTO buscarPorId(Long organizacaoId, Long id) {
+        return paraResponseDTO(buscarEntidadePorId(organizacaoId, id));
     }
 
     @Transactional
     public ItemEstoqueResponseDTO atualizar(Long id, ItemEstoqueRequestDTO dto) {
-        ItemEstoque item = buscarEntidadePorId(id);
+        return atualizar(idOrganizacaoLegadaOuNaoEncontrada(), id, dto);
+    }
+
+    @Transactional
+    public ItemEstoqueResponseDTO atualizar(Long organizacaoId, Long id, ItemEstoqueRequestDTO dto) {
+        ItemEstoque item = buscarEntidadePorId(organizacaoId, id);
         String codigo = dto.getCodigo().trim();
 
-        if (!item.getCodigo().equals(codigo) && itemEstoqueRepository.existsByCodigo(codigo)) {
+        if (!item.getCodigo().equals(codigo)
+                && itemEstoqueRepository.existsByCodigoAndOrganizacaoId(codigo, organizacaoId)) {
             throw new BusinessException("Já existe um item com esse código");
         }
 
@@ -78,22 +105,36 @@ public class ItemEstoqueService {
         item.setLocalizacao(trimNullable(dto.getLocalizacao()));
 
         item = itemEstoqueRepository.save(item);
-        log.info("Item atualizado id={}", item.getId());
+        log.info("Item atualizado id={} organizacaoId={}", item.getId(), organizacaoId);
         return paraResponseDTO(item);
     }
 
     @Transactional
     public void inativar(Long id) {
-        ItemEstoque item = buscarEntidadePorId(id);
+        inativar(idOrganizacaoLegadaOuNaoEncontrada(), id);
+    }
+
+    @Transactional
+    public void inativar(Long organizacaoId, Long id) {
+        ItemEstoque item = buscarEntidadePorId(organizacaoId, id);
         item.setAtivo(false);
         itemEstoqueRepository.save(item);
-        log.info("Item inativado id={}", item.getId());
+        log.info("Item inativado id={} organizacaoId={}", item.getId(), organizacaoId);
     }
 
     @Transactional
     public MovimentacaoEstoqueResponseDTO registrarEntrada(Long itemId, MovimentacaoEstoqueRequestDTO dto) {
+        return registrarEntrada(idOrganizacaoLegadaOuNaoEncontrada(), itemId, dto);
+    }
+
+    @Transactional
+    public MovimentacaoEstoqueResponseDTO registrarEntrada(
+            Long organizacaoId,
+            Long itemId,
+            MovimentacaoEstoqueRequestDTO dto
+    ) {
         validarQuantidadePositiva(dto.getQuantidade());
-        ItemEstoque item = buscarItemAtivo(itemId);
+        ItemEstoque item = buscarItemAtivo(organizacaoId, itemId);
         Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
 
         long novoSaldo = (long) item.getQuantidadeAtual() + dto.getQuantidade();
@@ -105,15 +146,24 @@ public class ItemEstoqueService {
         itemEstoqueRepository.save(item);
         MovimentacaoEstoque movimentacao = salvarMovimentacao(
                 item, usuario, TipoMovimentacaoEstoque.ENTRADA, dto.getQuantidade(), dto.getObservacao());
-        log.info("Entrada registrada itemId={} usuarioId={} quantidade={}",
-                item.getId(), usuario.getId(), dto.getQuantidade());
+        log.info("Entrada registrada itemId={} organizacaoId={} usuarioId={} quantidade={}",
+                item.getId(), organizacaoId, usuario.getId(), dto.getQuantidade());
         return paraMovimentacaoResponseDTO(movimentacao);
     }
 
     @Transactional
     public MovimentacaoEstoqueResponseDTO registrarSaida(Long itemId, MovimentacaoEstoqueRequestDTO dto) {
+        return registrarSaida(idOrganizacaoLegadaOuNaoEncontrada(), itemId, dto);
+    }
+
+    @Transactional
+    public MovimentacaoEstoqueResponseDTO registrarSaida(
+            Long organizacaoId,
+            Long itemId,
+            MovimentacaoEstoqueRequestDTO dto
+    ) {
         validarQuantidadePositiva(dto.getQuantidade());
-        ItemEstoque item = buscarItemAtivo(itemId);
+        ItemEstoque item = buscarItemAtivo(organizacaoId, itemId);
         Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
 
         if (item.getQuantidadeAtual() < dto.getQuantidade()) {
@@ -125,15 +175,24 @@ public class ItemEstoqueService {
         itemEstoqueRepository.save(item);
         MovimentacaoEstoque movimentacao = salvarMovimentacao(
                 item, usuario, TipoMovimentacaoEstoque.SAIDA, dto.getQuantidade(), dto.getObservacao());
-        log.info("Saída registrada itemId={} usuarioId={} quantidade={}",
-                item.getId(), usuario.getId(), dto.getQuantidade());
+        log.info("Saída registrada itemId={} organizacaoId={} usuarioId={} quantidade={}",
+                item.getId(), organizacaoId, usuario.getId(), dto.getQuantidade());
         return paraMovimentacaoResponseDTO(movimentacao);
     }
 
     @Transactional
     public MovimentacaoEstoqueResponseDTO registrarCorrecao(Long itemId, MovimentacaoEstoqueRequestDTO dto) {
+        return registrarCorrecao(idOrganizacaoLegadaOuNaoEncontrada(), itemId, dto);
+    }
+
+    @Transactional
+    public MovimentacaoEstoqueResponseDTO registrarCorrecao(
+            Long organizacaoId,
+            Long itemId,
+            MovimentacaoEstoqueRequestDTO dto
+    ) {
         String observacao = requireObservation(dto.getObservacao());
-        ItemEstoque item = buscarItemAtivo(itemId);
+        ItemEstoque item = buscarItemAtivo(organizacaoId, itemId);
         Usuario usuario = usuarioService.buscarUsuarioAtivo(dto.getUsuarioId());
 
         int quantidadeAnterior = item.getQuantidadeAtual();
@@ -146,32 +205,55 @@ public class ItemEstoqueService {
                 + ", nova: " + novaQuantidade + ")";
         MovimentacaoEstoque movimentacao = salvarMovimentacao(
                 item, usuario, TipoMovimentacaoEstoque.CORRECAO, diferenca, auditObservation);
-        log.info("Correção registrada itemId={} usuarioId={} diferenca={}",
-                item.getId(), usuario.getId(), diferenca);
+        log.info("Correção registrada itemId={} organizacaoId={} usuarioId={} diferenca={}",
+                item.getId(), organizacaoId, usuario.getId(), diferenca);
         return paraMovimentacaoResponseDTO(movimentacao);
     }
 
     public List<MovimentacaoEstoqueResponseDTO> consultarHistorico(Long itemId) {
-        buscarEntidadePorId(itemId);
-        return movimentacaoEstoqueRepository.findByItemEstoqueIdOrderByDataHoraDescIdDesc(itemId)
+        return consultarHistorico(idOrganizacaoLegadaOuNaoEncontrada(), itemId);
+    }
+
+    public List<MovimentacaoEstoqueResponseDTO> consultarHistorico(Long organizacaoId, Long itemId) {
+        buscarEntidadePorId(organizacaoId, itemId);
+        return movimentacaoEstoqueRepository
+                .findByOrganizacaoIdAndItemEstoqueIdOrderByDataHoraDescIdDesc(organizacaoId, itemId)
                 .stream().map(this::paraMovimentacaoResponseDTO).toList();
     }
 
     public List<ItemEstoqueResponseDTO> listarAbaixoDoMinimo() {
-        return itemEstoqueRepository.findItensAbaixoDoMinimo().stream().map(this::paraResponseDTO).toList();
+        return organizacaoService.buscarIdOrganizacaoLegada()
+                .map(this::listarAbaixoDoMinimo)
+                .orElseGet(List::of);
     }
 
-    public ItemEstoque buscarEntidadePorId(Long id) {
-        return itemEstoqueRepository.findById(id)
+    public List<ItemEstoqueResponseDTO> listarAbaixoDoMinimo(Long organizacaoId) {
+        organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
+        return itemEstoqueRepository.findItensAbaixoDoMinimoByOrganizacaoId(organizacaoId)
+                .stream().map(this::paraResponseDTO).toList();
+    }
+
+    public ItemEstoque buscarEntidadePorId(Long organizacaoId, Long id) {
+        organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
+        return itemEstoqueRepository.findByIdAndOrganizacaoId(id, organizacaoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Item de estoque com id " + id + " não encontrado"));
     }
 
-    private ItemEstoque buscarItemAtivo(Long id) {
-        ItemEstoque item = buscarEntidadePorId(id);
+    private ItemEstoque buscarEntidadeLegadaPorId(Long id) {
+        return buscarEntidadePorId(idOrganizacaoLegadaOuNaoEncontrada(), id);
+    }
+
+    private ItemEstoque buscarItemAtivo(Long organizacaoId, Long id) {
+        ItemEstoque item = buscarEntidadePorId(organizacaoId, id);
         if (!Boolean.TRUE.equals(item.getAtivo())) {
             throw new BusinessException("O item de estoque está inativo");
         }
         return item;
+    }
+
+    private Long idOrganizacaoLegadaOuNaoEncontrada() {
+        return organizacaoService.buscarIdOrganizacaoLegada()
+                .orElseThrow(() -> new ResourceNotFoundException("Organização legada não encontrada"));
     }
 
     private void validarQuantidadePositiva(Integer quantidade) {
@@ -199,6 +281,7 @@ public class ItemEstoqueService {
             String observacao
     ) {
         return movimentacaoEstoqueRepository.save(MovimentacaoEstoque.builder()
+                .organizacao(item.getOrganizacao())
                 .itemEstoque(item)
                 .usuario(usuario)
                 .tipoMovimentacao(tipo)
