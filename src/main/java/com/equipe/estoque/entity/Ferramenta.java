@@ -22,6 +22,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Check;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(
         name = "ferramentas",
@@ -44,8 +46,9 @@ import org.hibernate.annotations.Check;
                 )
         }
 )
-@Check(constraints = "(status = 'EMPRESTADA' AND responsavel_atual_id IS NOT NULL) OR "
-        + "(status <> 'EMPRESTADA' AND responsavel_atual_id IS NULL)")
+@Check(constraints = "((status = 'EMPRESTADA' AND responsavel_atual_id IS NOT NULL) OR "
+        + "(status <> 'EMPRESTADA' AND responsavel_atual_id IS NULL)) AND "
+        + "(status = 'EMPRESTADA' OR (responsavel_desde IS NULL AND destino_atual IS NULL))")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -83,6 +86,12 @@ public class Ferramenta {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "responsavel_atual_id")
     private Usuario responsavelAtual;
+
+    @Column(name = "responsavel_desde")
+    private LocalDateTime responsavelDesde;
+
+    @Column(name = "destino_atual", length = 160)
+    private String destinoAtual;
 
     @Column(length = 120)
     private String localizacao;

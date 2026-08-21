@@ -3,6 +3,7 @@ package com.equipe.estoque.dto.movimentacao;
 import com.equipe.estoque.enums.StatusFerramenta;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -22,4 +23,12 @@ public class MovimentacaoFerramentaRequestDTO {
     @Size(max = 500, message = "Observação deve ter no máximo 500 caracteres")
     @Schema(description = "Justificativa; obrigatória em correções", example = "Ferramenta localizada", maxLength = 500)
     private String observacao;
+
+    @Size(max = 160, message = "Destino deve ter no máximo 160 caracteres")
+    @Schema(description = "Destino/local operacional opcional", example = "Linha 3", maxLength = 160)
+    private String destino;
+
+    @Positive(message = "Novo responsável deve possuir ID positivo")
+    @Schema(description = "Membro que receberá a ferramenta; usado somente em transferência", example = "12")
+    private Long novoResponsavelUsuarioId;
 }

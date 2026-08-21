@@ -6,15 +6,18 @@ import com.equipe.estoque.dto.auth.RegisterRequestDTO;
 import com.equipe.estoque.dto.item.ItemEstoqueRequestDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoEstoqueRequestDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaRequestDTO;
+import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaResponseDTO;
 import com.equipe.estoque.dto.usuario.UsuarioRequestDTO;
 import com.equipe.estoque.dto.usuario.UsuarioResponseDTO;
 import com.equipe.estoque.entity.Ferramenta;
 import com.equipe.estoque.entity.ItemEstoque;
 import com.equipe.estoque.entity.Organizacao;
 import com.equipe.estoque.entity.OrganizacaoMembro;
+import com.equipe.estoque.entity.Usuario;
 import com.equipe.estoque.enums.PerfilMembroOrganizacao;
 import com.equipe.estoque.enums.PerfilUsuario;
 import com.equipe.estoque.enums.StatusMembroOrganizacao;
+import com.equipe.estoque.enums.StatusRevisaoMovimentacao;
 import com.equipe.estoque.exception.BusinessException;
 import com.equipe.estoque.exception.ResourceNotFoundException;
 import com.equipe.estoque.repository.FerramentaRepository;
@@ -25,6 +28,7 @@ import com.equipe.estoque.service.AuthService;
 import com.equipe.estoque.service.AuthSessionService;
 import com.equipe.estoque.service.FerramentaService;
 import com.equipe.estoque.service.ItemEstoqueService;
+import com.equipe.estoque.service.MovimentacaoFerramentaService;
 import com.equipe.estoque.service.OrganizacaoService;
 import com.equipe.estoque.service.UsuarioService;
 import jakarta.persistence.EntityManagerFactory;
@@ -41,6 +45,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -52,6 +58,12 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.time.LocalDateTime;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -117,6 +129,9 @@ class PostgreSQLTestcontainersIntegrationTest {
     private FerramentaService ferramentaService;
 
     @Autowired
+    private MovimentacaoFerramentaService movimentacaoFerramentaService;
+
+    @Autowired
     private AuthService authService;
 
     @Autowired
@@ -127,6 +142,9 @@ class PostgreSQLTestcontainersIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Test
     void deveValidarAplicacaoComPostgresqlReal() {
@@ -140,12 +158,12 @@ class PostgreSQLTestcontainersIntegrationTest {
                  WHERE version IS NOT NULL
                  ORDER BY installed_rank
                 """);
-        assertEquals(List.of("1", "2", "3", "4", "5", "6"), migrations.stream()
+        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), migrations.stream()
                 .map(migration -> migration.get("version").toString())
                 .toList());
         assertTrue(migrations.stream()
                 .allMatch(migration -> Boolean.TRUE.equals(migration.get("success"))));
-        assertEquals("6", flyway.info().current().getVersion().toString());
+        assertEquals("7", flyway.info().current().getVersion().toString());
         assertEquals(2, jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                   FROM information_schema.tables
@@ -424,6 +442,111 @@ class PostgreSQLTestcontainersIntegrationTest {
     }
 
     @Test
+    void deveExecutarTransferenciaEConfirmacaoNoPostgresqlReal() {
+        String suffix = Long.toString(System.nanoTime());
+        UsuarioResponseDTO admin = criarUsuario(
+                "Admin Operacional PostgreSQL",
+                "admin-operacional-" + suffix + "@example.com"
+        );
+        UsuarioResponseDTO operator = criarUsuario(
+                "Operador Origem PostgreSQL",
+                "operador-origem-" + suffix + "@example.com"
+        );
+        UsuarioResponseDTO target = criarUsuario(
+                "Operador Destino PostgreSQL",
+                "operador-destino-" + suffix + "@example.com"
+        );
+        Organizacao organization = organizacaoService.criar(
+                "Fluxo PostgreSQL " + suffix,
+                admin.getId()
+        );
+        Usuario adminEntity = usuarioRepository.findById(admin.getId()).orElseThrow();
+        saveActiveOperator(organization, operator.getId(), adminEntity);
+        saveActiveOperator(organization, target.getId(), adminEntity);
+        Long toolId = ferramentaService.criar(
+                organization.getId(),
+                ferramentaRequest("PG-OPERACIONAL-" + suffix)
+        ).getId();
+        MovimentacaoFerramentaRequestDTO withdrawal = new MovimentacaoFerramentaRequestDTO();
+        withdrawal.setDestino("Linha PostgreSQL");
+        MovimentacaoFerramentaResponseDTO first = ferramentaService.registrarRetirada(
+                organization.getId(), toolId, operator.getId(), withdrawal
+        );
+        MovimentacaoFerramentaRequestDTO transfer = new MovimentacaoFerramentaRequestDTO();
+        transfer.setNovoResponsavelUsuarioId(target.getId());
+        transfer.setObservacao("Transferência validada no PostgreSQL");
+
+        MovimentacaoFerramentaResponseDTO transferred = ferramentaService.registrarTransferencia(
+                organization.getId(), toolId, operator.getId(), transfer
+        );
+        MovimentacaoFerramentaResponseDTO confirmed = movimentacaoFerramentaService.confirmar(
+                organization.getId(), transferred.getId(), admin.getId()
+        );
+
+        assertEquals(StatusRevisaoMovimentacao.PENDENTE, first.getStatusRevisao());
+        assertEquals(operator.getId(), transferred.getResponsavelAnteriorUsuarioId());
+        assertEquals(target.getId(), transferred.getResponsavelUsuarioId());
+        assertEquals(StatusRevisaoMovimentacao.CONFIRMADA, confirmed.getStatusRevisao());
+        Ferramenta tool = ferramentaRepository.findById(toolId).orElseThrow();
+        assertEquals(target.getId(), tool.getResponsavelAtual().getId());
+        assertEquals("Linha PostgreSQL", tool.getDestinoAtual());
+    }
+
+    @Test
+    void deveImpedirDuasRetiradasConcorrentesNoPostgresqlReal() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        UsuarioResponseDTO admin = criarUsuario(
+                "Admin concorrência PostgreSQL",
+                "admin-concorrencia-pg-" + suffix + "@example.com"
+        );
+        UsuarioResponseDTO firstOperator = criarUsuario(
+                "Operador concorrente PostgreSQL 1",
+                "operador-concorrencia-pg-1-" + suffix + "@example.com"
+        );
+        UsuarioResponseDTO secondOperator = criarUsuario(
+                "Operador concorrente PostgreSQL 2",
+                "operador-concorrencia-pg-2-" + suffix + "@example.com"
+        );
+        Organizacao organization = organizacaoService.criar(
+                "Concorrência PostgreSQL " + suffix,
+                admin.getId()
+        );
+        Usuario adminEntity = usuarioRepository.findById(admin.getId()).orElseThrow();
+        saveActiveOperator(organization, firstOperator.getId(), adminEntity);
+        saveActiveOperator(organization, secondOperator.getId(), adminEntity);
+        Long toolId = ferramentaService.criar(
+                organization.getId(),
+                ferramentaRequest("PG-CONCORRENTE-" + suffix)
+        ).getId();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> first = executor.submit(() -> attemptPostgresqlWithdrawal(
+                    organization.getId(), toolId, firstOperator.getId(), ready, start
+            ));
+            Future<Boolean> second = executor.submit(() -> attemptPostgresqlWithdrawal(
+                    organization.getId(), toolId, secondOperator.getId(), ready, start
+            ));
+            ready.await();
+            start.countDown();
+
+            assertEquals(1, (first.get() ? 1 : 0) + (second.get() ? 1 : 0));
+        } finally {
+            executor.shutdownNow();
+        }
+
+        Ferramenta tool = ferramentaRepository.findById(toolId).orElseThrow();
+        assertNotNull(tool.getResponsavelAtual());
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM movimentacoes_ferramenta
+                 WHERE organizacao_id = ?
+                   AND ferramenta_id = ?
+                   AND tipo_movimentacao = 'RETIRADA'
+                """, Integer.class, organization.getId(), toolId));
+    }
+
+    @Test
     void deveMigrarSchemaPostgresqlPopuladoDeV4ParaV5SemInventarCredencial() throws Exception {
         String schema = "legacy_v4_to_v5";
         flywayForSchema(schema, "4").migrate();
@@ -447,12 +570,12 @@ class PostgreSQLTestcontainersIntegrationTest {
                        AND senha_alterada_em IS NULL
                        AND ultimo_login_em IS NULL
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), historyVersions(statement));
         }
     }
 
     @Test
-    void deveMigrarSchemaPostgresqlPopuladoDeV5ParaV6SemPerderCredencial() throws Exception {
+    void deveMigrarSchemaPostgresqlPopuladoDeV5ParaV7SemPerderCredencial() throws Exception {
         String schema = "legacy_v5_to_v6";
         flywayForSchema(schema, "5").migrate();
         try (Connection connection = legacyConnection(schema);
@@ -487,7 +610,84 @@ class PostgreSQLTestcontainersIntegrationTest {
                     """));
             assertEquals(0, scalar(statement, "SELECT COUNT(*) FROM refresh_tokens"));
             assertEquals(0, scalar(statement, "SELECT COUNT(*) FROM tokens_recuperacao_senha"));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), historyVersions(statement));
+        }
+    }
+
+    @Test
+    void deveMigrarSchemaOperacionalPopuladoDeV6ParaV7SemPerderHistorico() throws Exception {
+        String schema = "legacy_v6_to_v7_tool";
+        flywayForSchema(schema, "6").migrate();
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO usuarios (
+                        id, nome, email, perfil, ativo, versao,
+                        token_version, tentativas_login_falhas
+                    ) VALUES (
+                        1101, 'Operador V6', 'operador-pg-v6@example.com',
+                        'OPERADOR', TRUE, 3, 0, 0
+                    )
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO organizacoes (
+                        id, versao, nome, ativa, criada_em, criada_por_usuario_id
+                    ) VALUES (
+                        1102, 0, 'Organização PG V6', TRUE,
+                        TIMESTAMP '2026-08-20 08:00:00', 1101
+                    )
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO organizacao_membros (
+                        id, versao, organizacao_id, usuario_id, perfil, status,
+                        solicitado_em, aprovado_em, aprovado_por_usuario_id
+                    ) VALUES (
+                        1103, 0, 1102, 1101, 'OPERADOR', 'ATIVO',
+                        TIMESTAMP '2026-08-20 08:00:00',
+                        TIMESTAMP '2026-08-20 08:00:00', 1101
+                    )
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO ferramentas (
+                        id, versao, organizacao_id, patrimonio, nome, categoria,
+                        status, responsavel_atual_id, localizacao, ativo
+                    ) VALUES (
+                        1104, 7, 1102, 'LEGADO-PG-V6', 'Ferramenta PG V6', 'Teste',
+                        'EMPRESTADA', 1101, 'Armário PG', TRUE
+                    )
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO movimentacoes_ferramenta (
+                        id, organizacao_id, ferramenta_id, usuario_id,
+                        tipo_movimentacao, data_hora, observacao
+                    ) VALUES (
+                        1105, 1102, 1104, 1101, 'RETIRADA',
+                        TIMESTAMP '2026-08-20 09:30:00', 'Histórico PG V6'
+                    )
+                    """);
+        }
+
+        flywayForSchema(schema, null).migrate();
+
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            assertEquals(1, scalar(statement, """
+                    SELECT COUNT(*) FROM ferramentas
+                     WHERE id = 1104
+                       AND versao = 7
+                       AND responsavel_atual_id = 1101
+                       AND responsavel_desde = TIMESTAMP '2026-08-20 09:30:00'
+                       AND destino_atual IS NULL
+                    """));
+            assertEquals(1, scalar(statement, """
+                    SELECT COUNT(*) FROM movimentacoes_ferramenta
+                     WHERE id = 1105
+                       AND responsavel_usuario_id = 1101
+                       AND status_revisao = 'CONFIRMADA'
+                       AND confirmado_por_usuario_id IS NULL
+                       AND confirmado_em IS NULL
+                    """));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), historyVersions(statement));
         }
     }
 
@@ -569,7 +769,7 @@ class PostgreSQLTestcontainersIntegrationTest {
             assertEquals(5, scalar(statement, """
                     SELECT versao FROM ferramentas WHERE id = 301
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), historyVersions(statement));
         }
     }
 
@@ -656,5 +856,47 @@ class PostgreSQLTestcontainersIntegrationTest {
         request.setPatrimonio(patrimonio);
         request.setNome("Ferramenta PostgreSQL");
         return request;
+    }
+
+    private void saveActiveOperator(
+            Organizacao organization,
+            Long userId,
+            Usuario approvedBy
+    ) {
+        Usuario user = usuarioRepository.findById(userId).orElseThrow();
+        LocalDateTime now = LocalDateTime.now();
+        membroRepository.save(OrganizacaoMembro.builder()
+                .organizacao(organization)
+                .usuario(user)
+                .perfil(PerfilMembroOrganizacao.OPERADOR)
+                .status(StatusMembroOrganizacao.ATIVO)
+                .solicitadoEm(now)
+                .aprovadoEm(now)
+                .aprovadoPorUsuario(approvedBy)
+                .build());
+    }
+
+    private boolean attemptPostgresqlWithdrawal(
+            Long organizationId,
+            Long toolId,
+            Long operatorId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        ready.countDown();
+        try {
+            start.await();
+            return Boolean.TRUE.equals(new TransactionTemplate(transactionManager).execute(status -> {
+                MovimentacaoFerramentaRequestDTO request = new MovimentacaoFerramentaRequestDTO();
+                request.setObservacao("Retirada concorrente PostgreSQL");
+                ferramentaService.registrarRetirada(organizationId, toolId, operatorId, request);
+                return true;
+            }));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (RuntimeException exception) {
+            return false;
+        }
     }
 }

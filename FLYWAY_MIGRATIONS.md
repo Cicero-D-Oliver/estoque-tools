@@ -6,8 +6,9 @@ O Flyway 11.7.2, versão gerenciada pelo Spring Boot 3.5.16, passou a ser a
 fonte exclusiva de criação e evolução do schema. O Hibernate usa `validate`
 nos profiles SQLite, PostgreSQL e de testes; ele não cria nem altera tabelas.
 
-Não foram adicionadas autenticação, paginação, frontend, regras de negócio ou
-refatorações arquiteturais.
+Na adoção inicial não foram adicionadas autenticação, paginação, frontend,
+regras de negócio ou refatorações arquiteturais. A linha atual evoluiu por
+migrações posteriores e permanece em V7.
 
 ## Diagnóstico do banco legado
 
@@ -39,14 +40,27 @@ src/main/resources/db/migration/
 ├── sqlite/
 │   ├── V1__create_initial_schema.sql
 │   ├── V2__enforce_constraints_and_indexes.sql
+│   ├── V3__add_organizations_foundation.sql
+│   ├── V4__isolate_operational_data_by_organization.sql
+│   ├── V5__add_account_credentials.sql
+│   ├── V6__harden_authentication_sessions.sql
+│   ├── V7__add_tool_operational_workflow.sql
 │   └── beforeBaseline__verify_legacy_schema.sql
 └── postgresql/
     ├── V1__create_initial_schema.sql
-    └── V2__enforce_constraints_and_indexes.sql
+    ├── V2__enforce_constraints_and_indexes.sql
+    ├── V3__add_organizations_foundation.sql
+    ├── V4__isolate_operational_data_by_organization.sql
+    ├── V5__add_account_credentials.sql
+    ├── V6__harden_authentication_sessions.sql
+    └── V7__add_tool_operational_workflow.sql
 ```
 
 - `V1` representa o schema inicial/legado.
 - `V2` materializa tamanhos, FKs, `CHECK`, unicidade e índices finais.
+- `V3` cria organizações e memberships; `V4` isola os dados operacionais.
+- `V5` adiciona credenciais; `V6` endurece sessões e proteção de acesso.
+- `V7` adiciona transferência, contexto de posse e revisão administrativa.
 - No SQLite, V2 reconstrói as cinco tabelas dentro da transação do Flyway,
   copia explicitamente todas as colunas e preserva os IDs.
 - No PostgreSQL, V2 usa `ALTER TABLE`, constraints nomeadas e índices próprios.
@@ -81,7 +95,7 @@ export SQLITE_URL='jdbc:sqlite:/dados/estoque-novo.db'
 mvn spring-boot:run
 ```
 
-Flyway cria a tabela de histórico, aplica V1 e V2 e só então o Hibernate
+Flyway cria a tabela de histórico, aplica V1–V7 e só então o Hibernate
 valida o resultado. Uma segunda inicialização valida os checksums e não reaplica
 as versões concluídas.
 
@@ -142,7 +156,7 @@ Remove-Item Env:FLYWAY_BASELINE_ON_MIGRATE
 Remove-Item Env:SQLITE_URL
 ```
 
-O fluxo aceito registra uma entrada `BASELINE` na versão 1 e aplica V2. V1 não
+O fluxo aceito registra uma entrada `BASELINE` na versão 1 e aplica V2–V7. V1 não
 é executada sobre as tabelas existentes. Para incorporar o arquivo real em uma
 janela controlada, repita os mesmos passos apontando `SQLITE_URL` para o arquivo
 real somente depois de parar a aplicação, gerar e validar outro backup e obter
@@ -180,7 +194,7 @@ As migrações usam identidade `BIGINT`, `BOOLEAN`, `TIMESTAMP WITHOUT TIME ZONE
 `ALTER TABLE`, FKs e constraints nomeadas. A baseline automática permanece
 desabilitada. Um PostgreSQL preexistente só deve ser incorporado após backup e
 comparação real do catálogo com V1; não há uma guarda PostgreSQL genérica porque
-nenhuma instância legada foi disponibilizada nesta tarefa.
+nenhuma instância legada PostgreSQL foi disponibilizada para baseline.
 
 | Aspecto | SQLite | PostgreSQL |
 |---|---|---|
@@ -188,9 +202,9 @@ nenhuma instância legada foi disponibilizada nesta tarefa.
 | Adição de constraints | reconstrução transacional | `ALTER TABLE` |
 | Tamanho de `VARCHAR` | afinidade, não limita conteúdo | limite imposto pelo banco |
 | FKs | habilitadas por conexão com `PRAGMA foreign_keys=ON` | habilitadas pelo servidor |
-| Baseline legada | guarda executada e validada | pendente de instância real |
+| Baseline legada | guarda executada e validada | sem baseline automática ou guarda genérica |
 
-## Evidências executadas
+## Evidências históricas da adoção inicial (2026-08-05)
 
 - Backup completo pré-Flyway:
   `estoque-tools-pre-flyway-20260805-121308.tar`, 76.661.248 bytes, 432 arquivos,
@@ -222,7 +236,7 @@ O `estoque.db` original não foi migrado nem escrito. Ao final das validações 
 continuava com 77.824 bytes e SHA-256
 `8C212EFB93F67878A16F4997D2EDED7EC31DFB50388EEDDB40D9B9C24F42A96B`.
 
-## Limitações e pendências
+## Limitações históricas daquela etapa
 
 - Não havia Docker nem servidor PostgreSQL disponível. O DDL PostgreSQL foi
   revisado por inspeção e empacotado, mas não foi executado; validação real
@@ -231,3 +245,14 @@ continuava com 77.824 bytes e SHA-256
   tarefa.
 - Alterações futuras de schema devem ser novas versões; V1 e V2 não devem ser
   editadas depois de publicadas.
+
+## Estado atual validado (2026-08-20)
+
+- V1–V6 permanecem imutáveis. V7 é a candidata desta branch e também deverá
+  permanecer imutável depois da publicação; cada evolução exigirá nova versão.
+- SQLite novo, baseline legada e upgrade populado V6→V7 foram executados com
+  `foreign_key_check` íntegro e Hibernate `validate`.
+- PostgreSQL 17.11 foi executado via Testcontainers: banco novo, V1–V7,
+  Hibernate `validate`, upgrade populado V6→V7, constraints cross-tenant e
+  fluxo operacional real.
+- A suíte completa possui 102 testes, sem falhas, erros ou ignorados.

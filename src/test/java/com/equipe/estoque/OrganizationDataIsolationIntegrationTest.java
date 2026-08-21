@@ -187,8 +187,8 @@ class OrganizationDataIsolationIntegrationTest {
 
     @Test
     void deveValidarSchemaV4ComHibernateEFlywayNoSQLite() {
-        assertEquals("6", flyway.info().current().getVersion().toString());
-        assertEquals(List.of("1", "2", "3", "4", "5", "6"), jdbcTemplate.queryForList("""
+        assertEquals("7", flyway.info().current().getVersion().toString());
+        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), jdbcTemplate.queryForList("""
                 SELECT version
                   FROM flyway_schema_history
                  WHERE version IS NOT NULL
