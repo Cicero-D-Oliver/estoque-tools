@@ -7,18 +7,26 @@ import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaResponseDTO;
 import com.equipe.estoque.entity.Ferramenta;
 import com.equipe.estoque.entity.MovimentacaoFerramenta;
 import com.equipe.estoque.entity.Organizacao;
+import com.equipe.estoque.entity.OrganizacaoMembro;
 import com.equipe.estoque.entity.Usuario;
+import com.equipe.estoque.enums.PerfilMembroOrganizacao;
 import com.equipe.estoque.enums.StatusFerramenta;
+import com.equipe.estoque.enums.StatusMembroOrganizacao;
+import com.equipe.estoque.enums.StatusRevisaoMovimentacao;
 import com.equipe.estoque.enums.TipoMovimentacaoFerramenta;
 import com.equipe.estoque.exception.BusinessException;
 import com.equipe.estoque.exception.ResourceNotFoundException;
 import com.equipe.estoque.repository.FerramentaRepository;
 import com.equipe.estoque.repository.MovimentacaoFerramentaRepository;
+import com.equipe.estoque.repository.OrganizacaoMembroRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @Service
@@ -29,8 +37,8 @@ public class FerramentaService {
 
     private final FerramentaRepository ferramentaRepository;
     private final MovimentacaoFerramentaRepository movimentacaoFerramentaRepository;
-    private final UsuarioService usuarioService;
     private final OrganizacaoService organizacaoService;
+    private final OrganizacaoMembroRepository membroRepository;
 
     @Transactional
     public FerramentaResponseDTO criar(FerramentaRequestDTO dto) {
@@ -49,8 +57,8 @@ public class FerramentaService {
                 .organizacao(organizacao)
                 .patrimonio(patrimonio)
                 .nome(dto.getNome().trim())
-                .categoria(trimNullable(dto.getCategoria()))
-                .localizacao(trimNullable(dto.getLocalizacao()))
+                .categoria(normalizeOptional(dto.getCategoria(), 80, "Categoria"))
+                .localizacao(normalizeOptional(dto.getLocalizacao(), 120, "Localização"))
                 .status(StatusFerramenta.DISPONIVEL)
                 .ativo(true)
                 .build();
@@ -97,8 +105,8 @@ public class FerramentaService {
 
         ferramenta.setPatrimonio(patrimonio);
         ferramenta.setNome(dto.getNome().trim());
-        ferramenta.setCategoria(trimNullable(dto.getCategoria()));
-        ferramenta.setLocalizacao(trimNullable(dto.getLocalizacao()));
+        ferramenta.setCategoria(normalizeOptional(dto.getCategoria(), 80, "Categoria"));
+        ferramenta.setLocalizacao(normalizeOptional(dto.getLocalizacao(), 120, "Localização"));
 
         ferramenta = ferramentaRepository.save(ferramenta);
         log.info("Ferramenta atualizada id={} organizacaoId={}", ferramenta.getId(), organizacaoId);
@@ -128,21 +136,33 @@ public class FerramentaService {
             Long executorUsuarioId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
-        Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
+        OrganizacaoMembro executor = requireOperationalMember(organizacaoId, executorUsuarioId);
+        Usuario usuario = executor.getUsuario();
+        Ferramenta ferramenta = buscarFerramentaAtivaParaAtualizacao(organizacaoId, ferramentaId);
         if (ferramenta.getStatus() != StatusFerramenta.DISPONIVEL) {
             throw new BusinessException("Ferramenta não está disponível para retirada. Status atual: "
                     + ferramenta.getStatus());
         }
-
+        LocalDateTime operationTime = now();
+        String destination = normalizeOptional(dto.getDestino(), 160, "Destino");
         ferramenta.setStatus(StatusFerramenta.EMPRESTADA);
         ferramenta.setResponsavelAtual(usuario);
-        ferramentaRepository.save(ferramenta);
+        ferramenta.setResponsavelDesde(operationTime);
+        ferramenta.setDestinoAtual(destination);
+        ferramentaRepository.saveAndFlush(ferramenta);
         MovimentacaoFerramenta movimentacao = salvarMovimentacao(
-                ferramenta, usuario, TipoMovimentacaoFerramenta.RETIRADA, dto.getObservacao());
+                ferramenta,
+                usuario,
+                usuario,
+                null,
+                TipoMovimentacaoFerramenta.RETIRADA,
+                operationTime,
+                dto.getObservacao(),
+                destination
+        );
         log.info("Retirada registrada ferramentaId={} organizacaoId={} usuarioId={}",
                 ferramenta.getId(), organizacaoId, usuario.getId());
-        return paraMovimentacaoResponseDTO(movimentacao);
+        return MovimentacaoFerramentaMapper.toResponse(movimentacao);
     }
 
     @Transactional
@@ -152,20 +172,86 @@ public class FerramentaService {
             Long executorUsuarioId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
-        Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
+        OrganizacaoMembro executor = requireOperationalMember(organizacaoId, executorUsuarioId);
+        Usuario usuario = executor.getUsuario();
+        Ferramenta ferramenta = buscarFerramentaAtivaParaAtualizacao(organizacaoId, ferramentaId);
         if (ferramenta.getStatus() != StatusFerramenta.EMPRESTADA) {
             throw new BusinessException("Ferramenta não está emprestada. Status atual: " + ferramenta.getStatus());
         }
-
+        Usuario previousResponsible = ferramenta.getResponsavelAtual();
+        String previousDestination = ferramenta.getDestinoAtual();
+        LocalDateTime operationTime = now();
         ferramenta.setStatus(StatusFerramenta.DISPONIVEL);
         ferramenta.setResponsavelAtual(null);
-        ferramentaRepository.save(ferramenta);
+        ferramenta.setResponsavelDesde(null);
+        ferramenta.setDestinoAtual(null);
+        ferramentaRepository.saveAndFlush(ferramenta);
         MovimentacaoFerramenta movimentacao = salvarMovimentacao(
-                ferramenta, usuario, TipoMovimentacaoFerramenta.DEVOLUCAO, dto.getObservacao());
+                ferramenta,
+                usuario,
+                null,
+                previousResponsible,
+                TipoMovimentacaoFerramenta.DEVOLUCAO,
+                operationTime,
+                dto.getObservacao(),
+                previousDestination
+        );
         log.info("Devolução registrada ferramentaId={} organizacaoId={} usuarioId={}",
                 ferramenta.getId(), organizacaoId, usuario.getId());
-        return paraMovimentacaoResponseDTO(movimentacao);
+        return MovimentacaoFerramentaMapper.toResponse(movimentacao);
+    }
+
+    @Transactional
+    public MovimentacaoFerramentaResponseDTO registrarTransferencia(
+            Long organizacaoId,
+            Long ferramentaId,
+            Long executorUsuarioId,
+            MovimentacaoFerramentaRequestDTO dto
+    ) {
+        if (dto.getNovoResponsavelUsuarioId() == null) {
+            throw new BusinessException("Novo responsável é obrigatório para transferência");
+        }
+        OrganizacaoMembro executor = requireOperationalMember(organizacaoId, executorUsuarioId);
+        OrganizacaoMembro target = requireOperationalMember(
+                organizacaoId,
+                dto.getNovoResponsavelUsuarioId()
+        );
+        Ferramenta ferramenta = buscarFerramentaAtivaParaAtualizacao(organizacaoId, ferramentaId);
+        if (ferramenta.getStatus() != StatusFerramenta.EMPRESTADA
+                || ferramenta.getResponsavelAtual() == null) {
+            throw new BusinessException("Somente uma ferramenta em uso pode ser transferida");
+        }
+        Usuario previousResponsible = ferramenta.getResponsavelAtual();
+        if (!previousResponsible.getId().equals(executorUsuarioId)
+                && executor.getPerfil() != PerfilMembroOrganizacao.ADMIN) {
+            throw new AccessDeniedException("Acesso negado");
+        }
+        if (previousResponsible.getId().equals(target.getUsuario().getId())) {
+            throw new BusinessException("O novo responsável deve ser diferente do responsável atual");
+        }
+
+        String requestedDestination = normalizeOptional(dto.getDestino(), 160, "Destino");
+        String resultingDestination = requestedDestination == null
+                ? ferramenta.getDestinoAtual()
+                : requestedDestination;
+        LocalDateTime operationTime = now();
+        ferramenta.setResponsavelAtual(target.getUsuario());
+        ferramenta.setResponsavelDesde(operationTime);
+        ferramenta.setDestinoAtual(resultingDestination);
+        ferramentaRepository.saveAndFlush(ferramenta);
+        MovimentacaoFerramenta movement = salvarMovimentacao(
+                ferramenta,
+                executor.getUsuario(),
+                target.getUsuario(),
+                previousResponsible,
+                TipoMovimentacaoFerramenta.TRANSFERENCIA,
+                operationTime,
+                dto.getObservacao(),
+                resultingDestination
+        );
+        log.info("Transferência registrada ferramentaId={} organizacaoId={} executorId={} responsavelId={}",
+                ferramentaId, organizacaoId, executorUsuarioId, target.getUsuario().getId());
+        return MovimentacaoFerramentaMapper.toResponse(movement);
     }
 
     @Transactional
@@ -175,23 +261,29 @@ public class FerramentaService {
             Long executorUsuarioId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
-        Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
+        Usuario usuario = requireOperationalMember(organizacaoId, executorUsuarioId).getUsuario();
+        Ferramenta ferramenta = buscarFerramentaAtivaParaAtualizacao(organizacaoId, ferramentaId);
         if (ferramenta.getStatus() == StatusFerramenta.PERDIDA) {
             throw new BusinessException("Ferramenta perdida não pode ser enviada para manutenção");
         }
         if (ferramenta.getStatus() == StatusFerramenta.MANUTENCAO) {
             throw new BusinessException("Ferramenta já está em manutenção");
         }
-
+        Usuario previousResponsible = ferramenta.getResponsavelAtual();
+        String previousDestination = ferramenta.getDestinoAtual();
+        LocalDateTime operationTime = now();
         ferramenta.setStatus(StatusFerramenta.MANUTENCAO);
         ferramenta.setResponsavelAtual(null);
-        ferramentaRepository.save(ferramenta);
+        ferramenta.setResponsavelDesde(null);
+        ferramenta.setDestinoAtual(null);
+        ferramentaRepository.saveAndFlush(ferramenta);
         MovimentacaoFerramenta movimentacao = salvarMovimentacao(
-                ferramenta, usuario, TipoMovimentacaoFerramenta.MANUTENCAO, dto.getObservacao());
+                ferramenta, usuario, null, previousResponsible,
+                TipoMovimentacaoFerramenta.MANUTENCAO, operationTime,
+                dto.getObservacao(), previousDestination);
         log.info("Manutenção registrada ferramentaId={} organizacaoId={} usuarioId={}",
                 ferramenta.getId(), organizacaoId, usuario.getId());
-        return paraMovimentacaoResponseDTO(movimentacao);
+        return MovimentacaoFerramentaMapper.toResponse(movimentacao);
     }
 
     @Transactional
@@ -201,20 +293,26 @@ public class FerramentaService {
             Long executorUsuarioId,
             MovimentacaoFerramentaRequestDTO dto
     ) {
-        Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
+        Usuario usuario = requireOperationalMember(organizacaoId, executorUsuarioId).getUsuario();
+        Ferramenta ferramenta = buscarFerramentaAtivaParaAtualizacao(organizacaoId, ferramentaId);
         if (ferramenta.getStatus() == StatusFerramenta.PERDIDA) {
             throw new BusinessException("Ferramenta já está marcada como perdida");
         }
-
+        Usuario previousResponsible = ferramenta.getResponsavelAtual();
+        String previousDestination = ferramenta.getDestinoAtual();
+        LocalDateTime operationTime = now();
         ferramenta.setStatus(StatusFerramenta.PERDIDA);
         ferramenta.setResponsavelAtual(null);
-        ferramentaRepository.save(ferramenta);
+        ferramenta.setResponsavelDesde(null);
+        ferramenta.setDestinoAtual(null);
+        ferramentaRepository.saveAndFlush(ferramenta);
         MovimentacaoFerramenta movimentacao = salvarMovimentacao(
-                ferramenta, usuario, TipoMovimentacaoFerramenta.PERDA, dto.getObservacao());
+                ferramenta, usuario, null, previousResponsible,
+                TipoMovimentacaoFerramenta.PERDA, operationTime,
+                dto.getObservacao(), previousDestination);
         log.info("Perda registrada ferramentaId={} organizacaoId={} usuarioId={}",
                 ferramenta.getId(), organizacaoId, usuario.getId());
-        return paraMovimentacaoResponseDTO(movimentacao);
+        return MovimentacaoFerramentaMapper.toResponse(movimentacao);
     }
 
     @Transactional
@@ -231,23 +329,29 @@ public class FerramentaService {
             throw new BusinessException("Use a retirada para definir o status EMPRESTADA e registrar o responsável");
         }
         String observacao = requireObservation(dto.getObservacao());
-        Ferramenta ferramenta = buscarFerramentaAtiva(organizacaoId, ferramentaId);
-        Usuario usuario = usuarioService.buscarUsuarioAtivo(executorUsuarioId);
+        Usuario usuario = requireOperationalMember(organizacaoId, executorUsuarioId).getUsuario();
+        Ferramenta ferramenta = buscarFerramentaAtivaParaAtualizacao(organizacaoId, ferramentaId);
         StatusFerramenta statusAnterior = ferramenta.getStatus();
         if (statusAnterior == dto.getNovoStatus()) {
             throw new BusinessException("O novo status deve ser diferente do status atual");
         }
-
+        Usuario previousResponsible = ferramenta.getResponsavelAtual();
+        String previousDestination = ferramenta.getDestinoAtual();
+        LocalDateTime operationTime = now();
         ferramenta.setStatus(dto.getNovoStatus());
         ferramenta.setResponsavelAtual(null);
-        ferramentaRepository.save(ferramenta);
+        ferramenta.setResponsavelDesde(null);
+        ferramenta.setDestinoAtual(null);
+        ferramentaRepository.saveAndFlush(ferramenta);
         String auditObservation = observacao + " (status anterior: " + statusAnterior
                 + ", novo: " + dto.getNovoStatus() + ")";
         MovimentacaoFerramenta movimentacao = salvarMovimentacao(
-                ferramenta, usuario, TipoMovimentacaoFerramenta.CORRECAO, auditObservation);
+                ferramenta, usuario, null, previousResponsible,
+                TipoMovimentacaoFerramenta.CORRECAO, operationTime,
+                auditObservation, previousDestination);
         log.info("Correção registrada ferramentaId={} organizacaoId={} usuarioId={} statusAnterior={} novoStatus={}",
                 ferramenta.getId(), organizacaoId, usuario.getId(), statusAnterior, dto.getNovoStatus());
-        return paraMovimentacaoResponseDTO(movimentacao);
+        return MovimentacaoFerramentaMapper.toResponse(movimentacao);
     }
 
     public List<MovimentacaoFerramentaResponseDTO> consultarHistorico(Long ferramentaId) {
@@ -261,7 +365,7 @@ public class FerramentaService {
         buscarEntidadePorId(organizacaoId, ferramentaId);
         return movimentacaoFerramentaRepository
                 .findByOrganizacaoIdAndFerramentaIdOrderByDataHoraDescIdDesc(organizacaoId, ferramentaId)
-                .stream().map(this::paraMovimentacaoResponseDTO).toList();
+                .stream().map(MovimentacaoFerramentaMapper::toResponse).toList();
     }
 
     public List<FerramentaResponseDTO> listarEmprestadas() {
@@ -286,11 +390,16 @@ public class FerramentaService {
     ) {
         buscarEntidadePorId(organizacaoId, ferramentaId);
         MovimentacaoFerramenta ultima = movimentacaoFerramentaRepository
-                .findTopByOrganizacaoIdAndFerramentaIdAndTipoMovimentacaoOrderByDataHoraDescIdDesc(
-                        organizacaoId, ferramentaId, TipoMovimentacaoFerramenta.RETIRADA)
+                .findTopByOrganizacaoIdAndFerramentaIdAndTipoMovimentacaoInOrderByDataHoraDescIdDesc(
+                        organizacaoId,
+                        ferramentaId,
+                        List.of(
+                                TipoMovimentacaoFerramenta.RETIRADA,
+                                TipoMovimentacaoFerramenta.TRANSFERENCIA
+                        ))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Esta ferramenta ainda não possui registro de retirada"));
-        return paraMovimentacaoResponseDTO(ultima);
+        return MovimentacaoFerramentaMapper.toResponse(ultima);
     }
 
     public Ferramenta buscarEntidadePorId(Long organizacaoId, Long id) {
@@ -303,8 +412,11 @@ public class FerramentaService {
         return buscarEntidadePorId(idOrganizacaoLegadaOuNaoEncontrada(), id);
     }
 
-    private Ferramenta buscarFerramentaAtiva(Long organizacaoId, Long id) {
-        Ferramenta ferramenta = buscarEntidadePorId(organizacaoId, id);
+    private Ferramenta buscarFerramentaAtivaParaAtualizacao(Long organizacaoId, Long id) {
+        organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
+        Ferramenta ferramenta = ferramentaRepository.findByIdAndOrganizacaoIdForUpdate(id, organizacaoId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Ferramenta com id " + id + " não encontrada"));
         if (!Boolean.TRUE.equals(ferramenta.getAtivo())) {
             throw new BusinessException("A ferramenta está inativa");
         }
@@ -323,20 +435,28 @@ public class FerramentaService {
         return value.trim();
     }
 
-    private String trimNullable(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
-
     private MovimentacaoFerramenta salvarMovimentacao(
             Ferramenta ferramenta,
-            Usuario usuario,
+            Usuario executor,
+            Usuario responsible,
+            Usuario previousResponsible,
             TipoMovimentacaoFerramenta tipo,
-            String observacao
+            LocalDateTime operationTime,
+            String observacao,
+            String destination
     ) {
         return movimentacaoFerramentaRepository.save(MovimentacaoFerramenta.builder()
                 .organizacao(ferramenta.getOrganizacao())
-                .ferramenta(ferramenta).usuario(usuario).tipoMovimentacao(tipo)
-                .observacao(trimNullable(observacao)).build());
+                .ferramenta(ferramenta)
+                .usuario(executor)
+                .responsavelUsuario(responsible)
+                .responsavelAnteriorUsuario(previousResponsible)
+                .tipoMovimentacao(tipo)
+                .dataHora(operationTime)
+                .observacao(normalizeOptional(observacao, 500, "Observação"))
+                .destino(destination)
+                .statusRevisao(StatusRevisaoMovimentacao.PENDENTE)
+                .build());
     }
 
     private FerramentaResponseDTO paraResponseDTO(Ferramenta ferramenta) {
@@ -346,16 +466,36 @@ public class FerramentaService {
                 .categoria(ferramenta.getCategoria()).status(ferramenta.getStatus())
                 .responsavelAtualId(responsavel != null ? responsavel.getId() : null)
                 .responsavelAtualNome(responsavel != null ? responsavel.getNome() : null)
+                .responsavelDesde(ferramenta.getResponsavelDesde())
+                .destinoAtual(ferramenta.getDestinoAtual())
                 .localizacao(ferramenta.getLocalizacao()).ativo(ferramenta.getAtivo()).build();
     }
 
-    private MovimentacaoFerramentaResponseDTO paraMovimentacaoResponseDTO(MovimentacaoFerramenta mov) {
-        return MovimentacaoFerramentaResponseDTO.builder()
-                .id(mov.getId()).ferramentaId(mov.getFerramenta().getId())
-                .ferramentaNome(mov.getFerramenta().getNome())
-                .ferramentaPatrimonio(mov.getFerramenta().getPatrimonio())
-                .usuarioId(mov.getUsuario().getId()).usuarioNome(mov.getUsuario().getNome())
-                .tipoMovimentacao(mov.getTipoMovimentacao()).dataHora(mov.getDataHora())
-                .observacao(mov.getObservacao()).build();
+    private OrganizacaoMembro requireOperationalMember(Long organizacaoId, Long usuarioId) {
+        return membroRepository.findByOrganizacaoIdAndUsuarioId(organizacaoId, usuarioId)
+                .filter(member -> member.getStatus() == StatusMembroOrganizacao.ATIVO)
+                .filter(member -> member.getPerfil() == PerfilMembroOrganizacao.ADMIN
+                        || member.getPerfil() == PerfilMembroOrganizacao.OPERADOR)
+                .filter(member -> Boolean.TRUE.equals(member.getOrganizacao().getAtiva()))
+                .filter(member -> Boolean.TRUE.equals(member.getUsuario().getAtivo()))
+                .orElseThrow(() -> new AccessDeniedException("Acesso negado"));
+    }
+
+    private String normalizeOptional(String value, int maximumLength, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maximumLength) {
+            throw new BusinessException(fieldName + " deve ter no máximo " + maximumLength + " caracteres");
+        }
+        if (normalized.chars().anyMatch(Character::isISOControl)) {
+            throw new BusinessException(fieldName + " contém caracteres inválidos");
+        }
+        return normalized;
+    }
+
+    private LocalDateTime now() {
+        return LocalDateTime.now(ZoneOffset.UTC);
     }
 }

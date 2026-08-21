@@ -4,6 +4,23 @@ Todas as alterações relevantes são documentadas neste arquivo.
 
 ## [Não lançado] — 2026-08-05 — Migrações Flyway
 
+### Fluxo operacional de ferramentas — 2026-08-20
+
+- Adicionado o registro explícito de transferência, separando o executor
+  autenticado do responsável atual da ferramenta.
+- Retirada, devolução, transferência, manutenção, perda e correção passam a
+  registrar horário oficial do backend, observação, destino e contexto anterior.
+- Criada revisão administrativa simples (`PENDENTE`/`CONFIRMADA`) que não
+  reexecuta nem posterga o efeito operacional.
+- Adicionados endpoints ADMIN para pendências, confirmação e resumo incremental
+  por cursor, com contadores do estado atual da organização.
+- Flyway V7 preserva o histórico V6, incorpora registros anteriores como já
+  revisados e adiciona FKs compostas contra vínculos de outras organizações.
+- Retiradas usam lock pessimista e versão otimista; testes simultâneos em SQLite
+  e PostgreSQL comprovam uma única posse válida.
+- A suíte atual cresce de 89 para 102 testes, incluindo o cenário de campo
+  AUTOMAÇÃO, upgrade V6→V7 nos dois vendors e PostgreSQL 17.11/Testcontainers.
+
 ### CI e documentação da suíte atual
 
 - Atualizada a documentação operacional para a suíte atual de 24 testes,

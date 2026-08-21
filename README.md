@@ -9,9 +9,11 @@ Backend REST para controlar usuários internos, itens consumíveis, ferramentas 
 
 - CRUD com inativação lógica de usuários, itens e ferramentas.
 - Entrada, saída e correção auditável do saldo de itens.
-- Retirada, devolução, manutenção, perda e correção de ferramentas.
+- Retirada, devolução, transferência, manutenção, perda e correção de ferramentas.
+- Responsável, horário de retirada e destino operacional atual da ferramenta.
+- Revisão administrativa posterior e resumo incremental de movimentações.
 - Consulta de ferramentas emprestadas, último responsável e itens abaixo do mínimo.
-- Históricos imutáveis para auditoria.
+- Históricos operacionais imutáveis para auditoria; apenas a confirmação administrativa é atualizável.
 - Validação de entrada, tratamento uniforme de erros e correlação de logs.
 - Swagger UI, OpenAPI 3.1 e healthcheck operacional.
 - Perfis separados para SQLite e PostgreSQL.
@@ -258,10 +260,11 @@ chmod +x scripts/linux-macos/*.sh
 mvn clean verify
 ```
 
-A suíte contém atualmente 89 testes. Eles atravessam HTTP, validação, services,
+A suíte contém atualmente 102 testes. Eles atravessam HTTP, validação, services,
 repositories, segurança, SQLite e PostgreSQL 17 via Testcontainers, além de
 exercitar migrações Flyway, assinatura integral do baseline, sessões rotativas,
-revogação, força bruta e isolamento entre organizações.
+revogação, força bruta, isolamento entre organizações, fluxo operacional de
+ferramentas e disputas concorrentes de retirada nos dois bancos.
 
 Relatórios gerados:
 
@@ -287,8 +290,8 @@ Use `-KeepArtifacts` somente para diagnóstico local; o comportamento padrão é
 ### Integração contínua
 
 A pipeline `.github/workflows/ci.yml` usa Java 17 e cache Maven. Em pushes e
-pull requests ela executa `mvn clean verify`, exige no mínimo os 89 testes do
-baseline atual e confirma a execução das dez classes de teste esperadas. O
+pull requests ela executa `mvn clean verify`, exige no mínimo os 102 testes do
+baseline atual e confirma a execução das doze classes de teste esperadas. O
 workflow rejeita falhas, erros, testes ignorados ou relatórios Surefire
 ausentes, mas permite que novos testes aumentem o total sem exigir manutenção
 da contagem. JaCoCo, PMD, CPD e o smoke test SQLite isolado continuam
@@ -331,10 +334,11 @@ O cabeçalho `X-Correlation-Id` é devolvido na resposta e aparece nos logs. Val
 - E-mail, código do item e patrimônio possuem unicidade materializada pelas migrações e validação na aplicação.
 - FKs de movimentações são obrigatórias.
 - Quantidades e campos essenciais usam `NOT NULL` e checks de não negatividade.
-- O estado `EMPRESTADA` exige responsável atual; outros estados exigem responsável nulo.
-- Entidades mutáveis usam `@Version` contra sobrescrita concorrente.
-- Índices cobrem status, ativos, responsáveis e históricos por recurso/data.
-- Históricos são entidades Hibernate imutáveis e não possuem endpoints de alteração/exclusão.
+- O estado `EMPRESTADA` exige responsável atual; outros estados exigem responsável e contexto operacional nulos.
+- Entidades mutáveis usam `@Version`; retiradas usam também lock transacional para impedir dupla posse.
+- Índices cobrem status, ativos, responsáveis, revisão administrativa e históricos por recurso/data.
+- Campos operacionais do histórico são não atualizáveis e não possuem endpoints de alteração/exclusão;
+  somente status, ADMIN e horário da confirmação posterior podem ser gravados.
 
 ## Estrutura de pastas
 

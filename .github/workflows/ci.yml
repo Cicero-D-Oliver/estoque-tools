@@ -45,9 +45,11 @@ jobs:
             "com.equipe.estoque.PostgreSQLTestcontainersIntegrationTest",
             "com.equipe.estoque.ProductionSecurityConfigurationIntegrationTest",
             "com.equipe.estoque.SecuritySessionHardeningIntegrationTest",
+            "com.equipe.estoque.ToolOperationalWorkflowIntegrationTest",
+            "com.equipe.estoque.ToolWithdrawalConcurrencyIntegrationTest",
             "com.equipe.estoque.config.SQLiteLegacyBaselineCallbackTest"
           )
-          $minimumTests = 89
+          $minimumTests = 102
           $total = 0
           $executedSuites = @()
           foreach ($report in $reports) {

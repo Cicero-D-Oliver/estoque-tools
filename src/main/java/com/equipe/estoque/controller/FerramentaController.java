@@ -125,6 +125,21 @@ public class FerramentaController {
                 organizacaoId, id, authenticatedAccount.id(), dto));
     }
 
+    @PostMapping("/{id}/transferencia")
+    @PreAuthorize("@organizationAuthorization.canOperate(#organizacaoId, authentication)")
+    @Operation(
+            summary = "Transferir responsabilidade",
+            description = "Registra a passagem explícita para outro membro operacional ativo da mesma organização."
+    )
+    public ResponseEntity<MovimentacaoFerramentaResponseDTO> registrarTransferencia(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
+            @PathVariable @Positive Long id,
+            @Valid @RequestBody MovimentacaoFerramentaRequestDTO dto
+    ) {
+        return created(ferramentaService.registrarTransferencia(
+                organizacaoId, id, authenticatedAccount.id(), dto));
+    }
+
     @PostMapping("/{id}/manutencao")
     @PreAuthorize("@organizationAuthorization.canOperate(#organizacaoId, authentication)")
     @Operation(summary = "Enviar para manutenção", description = "A autoria é sempre a conta autenticada.")
