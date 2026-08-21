@@ -60,6 +60,20 @@ public class Usuario {
     @Column(name = "ultimo_login_em")
     private LocalDateTime ultimoLoginEm;
 
+    @Builder.Default
+    @Column(name = "token_version", nullable = false)
+    private Long tokenVersion = 0L;
+
+    @Builder.Default
+    @Column(name = "tentativas_login_falhas", nullable = false)
+    private Integer tentativasLoginFalhas = 0;
+
+    @Column(name = "login_bloqueado_ate")
+    private LocalDateTime loginBloqueadoAte;
+
+    @Column(name = "ultima_falha_login_em")
+    private LocalDateTime ultimaFalhaLoginEm;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private PerfilUsuario perfil;

@@ -22,6 +22,7 @@ import com.equipe.estoque.repository.ItemEstoqueRepository;
 import com.equipe.estoque.repository.OrganizacaoMembroRepository;
 import com.equipe.estoque.repository.UsuarioRepository;
 import com.equipe.estoque.service.AuthService;
+import com.equipe.estoque.service.AuthSessionService;
 import com.equipe.estoque.service.FerramentaService;
 import com.equipe.estoque.service.ItemEstoqueService;
 import com.equipe.estoque.service.OrganizacaoService;
@@ -54,6 +55,7 @@ import java.sql.Statement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -118,6 +120,9 @@ class PostgreSQLTestcontainersIntegrationTest {
     private AuthService authService;
 
     @Autowired
+    private AuthSessionService authSessionService;
+
+    @Autowired
     private UsuarioRepository usuarioRepository;
 
     @Autowired
@@ -135,12 +140,18 @@ class PostgreSQLTestcontainersIntegrationTest {
                  WHERE version IS NOT NULL
                  ORDER BY installed_rank
                 """);
-        assertEquals(List.of("1", "2", "3", "4", "5"), migrations.stream()
+        assertEquals(List.of("1", "2", "3", "4", "5", "6"), migrations.stream()
                 .map(migration -> migration.get("version").toString())
                 .toList());
         assertTrue(migrations.stream()
                 .allMatch(migration -> Boolean.TRUE.equals(migration.get("success"))));
-        assertEquals("5", flyway.info().current().getVersion().toString());
+        assertEquals("6", flyway.info().current().getVersion().toString());
+        assertEquals(2, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                  FROM information_schema.tables
+                 WHERE table_schema = 'public'
+                   AND table_name IN ('refresh_tokens', 'tokens_recuperacao_senha')
+                """, Integer.class));
         assertEquals(2, jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                   FROM information_schema.tables
@@ -359,12 +370,56 @@ class PostgreSQLTestcontainersIntegrationTest {
         String hash = usuarioRepository.findById(accountId).orElseThrow().getSenhaHash();
 
         assertNotNull(token.getAccessToken());
+        assertNotNull(token.getRefreshToken());
         assertTrue(token.getExpiresIn() > 0);
         assertTrue(hash.startsWith("$2"));
         assertTrue(passwordEncoder.matches(request.getSenha(), hash));
         assertEquals(1, jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM usuarios
                  WHERE id = ? AND senha_hash IS NOT NULL AND senha_alterada_em IS NOT NULL
+                """, Integer.class, accountId));
+    }
+
+    @Test
+    void deveArmazenarSomenteHashERotacionarRefreshNoPostgresqlReal() {
+        RegisterRequestDTO request = new RegisterRequestDTO();
+        request.setNome("Sessão PostgreSQL");
+        request.setEmail("sessao-postgresql@example.com");
+        request.setSenha("SenhaPostgreSQL!2026");
+        Long accountId = authService.register(request).getId();
+
+        var login = new com.equipe.estoque.dto.auth.LoginRequestDTO();
+        login.setEmail(request.getEmail());
+        login.setSenha(request.getSenha());
+        AccessTokenResponseDTO first = authService.login(login);
+        String storedHash = jdbcTemplate.queryForObject(
+                "SELECT token_hash FROM refresh_tokens WHERE usuario_id = ?",
+                String.class,
+                accountId
+        );
+
+        assertNotNull(storedHash);
+        assertEquals(64, storedHash.length());
+        assertNotEquals(first.getRefreshToken(), storedHash);
+
+        AccessTokenResponseDTO rotated = authSessionService.refresh(first.getRefreshToken());
+
+        assertNotEquals(first.getRefreshToken(), rotated.getRefreshToken());
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM refresh_tokens WHERE usuario_id = ?",
+                Integer.class,
+                accountId
+        ));
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM refresh_tokens
+                 WHERE usuario_id = ?
+                   AND revogado_em IS NOT NULL
+                   AND motivo_revogacao = 'ROTACIONADO'
+                   AND substituido_por_id IS NOT NULL
+                """, Integer.class, accountId));
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM refresh_tokens
+                 WHERE usuario_id = ? AND revogado_em IS NULL
                 """, Integer.class, accountId));
     }
 
@@ -392,7 +447,47 @@ class PostgreSQLTestcontainersIntegrationTest {
                        AND senha_alterada_em IS NULL
                        AND ultimo_login_em IS NULL
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6"), historyVersions(statement));
+        }
+    }
+
+    @Test
+    void deveMigrarSchemaPostgresqlPopuladoDeV5ParaV6SemPerderCredencial() throws Exception {
+        String schema = "legacy_v5_to_v6";
+        flywayForSchema(schema, "5").migrate();
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO usuarios (
+                        id, nome, email, perfil, ativo, versao,
+                        senha_hash, senha_alterada_em, ultimo_login_em
+                    ) VALUES (
+                        801, 'Legado V5', 'legado-v6@example.com', 'OPERADOR', TRUE, 11,
+                        '$2a$12$01234567890123456789012345678901234567890123456789012',
+                        TIMESTAMP '2026-08-03 10:00:00', TIMESTAMP '2026-08-04 11:00:00'
+                    )
+                    """);
+        }
+
+        flywayForSchema(schema, null).migrate();
+
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            assertEquals(1, scalar(statement, """
+                    SELECT COUNT(*) FROM usuarios
+                     WHERE id = 801
+                       AND versao = 11
+                       AND senha_hash = '$2a$12$01234567890123456789012345678901234567890123456789012'
+                       AND senha_alterada_em = TIMESTAMP '2026-08-03 10:00:00'
+                       AND ultimo_login_em = TIMESTAMP '2026-08-04 11:00:00'
+                       AND token_version = 0
+                       AND tentativas_login_falhas = 0
+                       AND login_bloqueado_ate IS NULL
+                       AND ultima_falha_login_em IS NULL
+                    """));
+            assertEquals(0, scalar(statement, "SELECT COUNT(*) FROM refresh_tokens"));
+            assertEquals(0, scalar(statement, "SELECT COUNT(*) FROM tokens_recuperacao_senha"));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6"), historyVersions(statement));
         }
     }
 
@@ -474,7 +569,7 @@ class PostgreSQLTestcontainersIntegrationTest {
             assertEquals(5, scalar(statement, """
                     SELECT versao FROM ferramentas WHERE id = 301
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6"), historyVersions(statement));
         }
     }
 

@@ -55,6 +55,15 @@ public class GlobalExceptionHandler {
                 "E-mail ou senha inválidos.", null, request);
     }
 
+    @ExceptionHandler(InvalidSessionException.class)
+    public ResponseEntity<ErroResponse> handleInvalidSession(
+            InvalidSessionException ex,
+            HttpServletRequest request
+    ) {
+        return respond(HttpStatus.UNAUTHORIZED, "SESSAO_INVALIDA", "Sessão inválida",
+                "A sessão está expirada, revogada ou não é válida.", null, request);
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErroResponse> handleAccessDenied(
             AccessDeniedException ex,

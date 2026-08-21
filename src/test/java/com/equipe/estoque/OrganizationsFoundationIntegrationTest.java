@@ -54,14 +54,14 @@ class OrganizationsFoundationIntegrationTest {
 
     @Test
     void deveCriarTabelasDaFundacaoEAplicarIsolamentoAteV4() {
-        assertEquals("5", flyway.info().current().getVersion().toString());
+        assertEquals("6", flyway.info().current().getVersion().toString());
         assertEquals(2, jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                   FROM sqlite_schema
                  WHERE type = 'table'
                    AND name IN ('organizacoes', 'organizacao_membros')
                 """, Integer.class));
-        assertEquals(List.of("1", "2", "3", "4", "5"), jdbcTemplate.queryForList("""
+        assertEquals(List.of("1", "2", "3", "4", "5", "6"), jdbcTemplate.queryForList("""
                 SELECT version
                   FROM flyway_schema_history
                  WHERE version IS NOT NULL

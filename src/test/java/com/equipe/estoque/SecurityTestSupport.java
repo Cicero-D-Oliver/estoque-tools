@@ -26,7 +26,8 @@ abstract class SecurityTestSupport {
 
     protected Session registerAndLogin(String name, String email) throws Exception {
         long accountId = register(name, email);
-        return new Session(accountId, login(email, PASSWORD));
+        TokenPair tokens = loginTokens(email, PASSWORD);
+        return new Session(accountId, tokens.accessToken(), tokens.refreshToken());
     }
 
     protected long register(String name, String email) throws Exception {
@@ -45,6 +46,10 @@ abstract class SecurityTestSupport {
     }
 
     protected String login(String email, String password) throws Exception {
+        return loginTokens(email, password).accessToken();
+    }
+
+    protected TokenPair loginTokens(String email, String password) throws Exception {
         String response = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("email", email, "senha", password))))
@@ -52,7 +57,8 @@ abstract class SecurityTestSupport {
                 .andReturn()
                 .getResponse()
                 .getContentAsString(StandardCharsets.UTF_8);
-        return objectMapper.readTree(response).get("accessToken").asText();
+        JsonNode body = objectMapper.readTree(response);
+        return new TokenPair(body.get("accessToken").asText(), body.get("refreshToken").asText());
     }
 
     protected long createOrganization(Session session, String name) throws Exception {
@@ -90,6 +96,9 @@ abstract class SecurityTestSupport {
         return json.get("id").asLong();
     }
 
-    protected record Session(long accountId, String token) {
+    protected record TokenPair(String accessToken, String refreshToken) {
+    }
+
+    protected record Session(long accountId, String token, String refreshToken) {
     }
 }

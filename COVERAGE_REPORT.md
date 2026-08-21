@@ -1,10 +1,11 @@
 # Relatório de cobertura de testes
 
-Data da execução: 2026-08-05
+Data da execução: 2026-08-20
 
 ## Resultado da suíte
 
-- Testes executados: **24**
+- Testes executados: **89**
+- Suítes executadas: **10**
 - Falhas: **0**
 - Erros: **0**
 - Ignorados: **0**
@@ -22,82 +23,59 @@ mvn clean verify
 
 | Métrica | Coberto | Total | Cobertura |
 |---|---:|---:|---:|
-| Linhas | 607 | 660 | **91,97%** |
-| Instruções | 2.895 | 3.241 | **89,32%** |
-| Métodos | 147 | 163 | **90,18%** |
-| Branches | 121 | 171 | **70,76%** |
-| Complexidade | 186 | 249 | **74,70%** |
+| Linhas | 1.185 | 1.422 | **83,33%** |
+| Instruções | 5.483 | 6.699 | **81,85%** |
+| Métodos | 287 | 365 | **78,63%** |
+| Branches | 253 | 375 | **67,47%** |
+| Classes | 61 | 63 | **96,83%** |
+| Complexidade | 367 | 553 | **66,37%** |
 
-Código criado automaticamente pelo Lombok foi marcado como gerado e não entra
-nas métricas. Assim, o relatório mede a lógica escrita no projeto em vez de
-getters, setters, builders, `equals` e `hashCode` gerados automaticamente.
+Código criado automaticamente pelo Lombok é marcado como gerado e não entra
+nas métricas. O relatório mede a lógica escrita no projeto.
 
-## Cobertura por camada
+## Escopo automatizado atual
 
-| Camada | Linhas | Cobertura de linhas | Métodos | Cobertura de métodos | Branches |
-|---|---:|---:|---:|---:|---:|
-| Configuração, hardening HTTP, dialect e baseline SQLite | 202/221 | **91,40%** | 38/39 | **97,44%** | 69/89 — **77,53%** |
-| Controllers | 32/34 | **94,12%** | 29/31 | **93,55%** | sem branches |
-| Services | 304/323 | **94,12%** | 53/58 | **91,38%** | 50/78 — **64,10%** |
-| Exceções e handler global | 39/49 | **79,59%** | 16/23 | **69,57%** | 2/4 — **50,00%** |
-| DTOs | 9/9 | **100,00%** | 5/5 | **100,00%** | sem branches |
-| Enums | 19/19 | **100,00%** | 4/4 | **100,00%** | sem branches |
-| Classe principal | 2/5 | **40,00%** | 2/3 | **66,67%** | sem branches |
+A suíte usa bancos SQLite isolados e PostgreSQL 17.11 real via Testcontainers.
+Flyway cria bancos novos até V6 e também é exercitado na evolução V5→V6, com
+preservação dos dados. O Hibernate inicia com `ddl-auto=validate` nos dois
+vendors.
 
-Entidades baseadas em Lombok e interfaces de repository não possuem lógica
-executável própria relevante para o JaCoCo e, por isso, não aparecem como
-camadas separadas na tabela.
+Além dos fluxos de estoque, ferramentas, organizações e autorização já
+existentes, a execução cobre:
 
-## Cenários automatizados
-
-Os testes de aplicação usam `MockMvc` e atravessam controller, validação,
-service, repository e persistência SQLite criada pelas migrações Flyway. Os
-testes de baseline usam bancos temporários exclusivos e invocam Flyway
-diretamente. O Hibernate valida o schema antes da suíte de aplicação; os casos
-HTTP rodam em transação revertida ao final.
-
-1. CRUD completo de usuário, incluindo atualização, consulta e inativação.
-2. Validação uniforme, e-mail duplicado e recurso inexistente.
-3. Entrada, saída, correção, estoque mínimo e histórico de itens.
-4. Rejeição de saída sem saldo suficiente.
-5. Retirada, devolução, responsável atual e histórico de ferramentas.
-6. Manutenção, perda, correção de status e transições inválidas.
-7. Sanitização de JSON/enum inválidos e correlação de requisições.
-8. Rejeição de propriedades JSON desconhecidas e IDs inválidos.
-9. CORS para origem permitida e origem desconhecida.
-10. Bloqueio de movimentações com usuário, item ou ferramenta inativos.
-11. Rejeição de quantidade zero sem criação de histórico.
-12. Bloqueio de correção direta para o estado `EMPRESTADA`.
-13. Healthcheck e contrato OpenAPI, incluindo tags, rotas e schema de erro.
-14. Correspondência exata da fixture com a assinatura canônica aceita.
-15. Baseline do legado conhecido, aplicação de V2 e preservação de hashes.
-16. Rejeição de índice composto incompatível antes do histórico Flyway.
-17. Rejeição de trigger adicional antes do histórico Flyway.
-18. Rejeição de view adicional antes do histórico Flyway.
-19. Rejeição de collation divergente antes do histórico Flyway.
-20. Rejeição de ordem de coluna divergente antes do histórico Flyway.
-21. Rejeição de tabela adicional `STRICT`.
-22. Rejeição de tabela adicional `WITHOUT ROWID`.
-23. Aplicação normal de V1 e V2 em banco SQLite novo e vazio.
-24. Registro do callback de assinatura integral na configuração Flyway Spring.
+- login, JWT válido, adulterado e expirado;
+- conta inativa e membership removida;
+- emissão de refresh opaco com persistência exclusiva do SHA-256;
+- rotação obrigatória e detecção de reutilização da família;
+- refresh expirado ou revogado;
+- logout individual e global;
+- invalidação dos JWTs antigos por `token_version`;
+- troca de senha com política, BCrypt e revogação de sessões;
+- bloqueio persistente após tentativas repetidas e desbloqueio temporal;
+- comportamento genérico para conta inexistente;
+- infraestrutura interna de recuperação: hash, expiração, uso único e revogação;
+- schema e rotação de refresh no PostgreSQL real;
+- baseline SQLite integral e rejeição de schemas incompatíveis.
 
 ## Principais lacunas restantes
 
-- O método `main` não é chamado pela suíte; o contexto Spring é iniciado pela
-  infraestrutura de testes.
-- Alguns handlers pouco frequentes não são exercitados diretamente, como rota
-  inexistente, método HTTP não permitido, conflito otimista e falha interna 500.
-- Branches de conflitos de códigos/patrimônios e combinações opcionais menos
-  comuns ainda não têm casos dedicados.
-- Não há teste de concorrência para movimentações simultâneas.
-- O perfil PostgreSQL e o Compose não participam da suíte; os testes usam
-  SQLite isolado.
-- Não foi imposta uma trava mínima de cobertura no build para evitar que uma
-  política arbitrária fosse introduzida sem acordo da equipe.
+- Não existe adaptador externo para entrega do token de recuperação; por isso
+  não há endpoint público de recuperação.
+- Ainda não há teste de concorrência simultânea sobre rotação de refresh ou
+  atualização de estoque.
+- Caminhos raros de erro interno e algumas combinações opcionais permanecem sem
+  cobertura, refletindo principalmente os **67,47%** de branches.
+- A rotação de `APP_JWT_SECRET` é operacional e invalida sessões; não há suporte
+  a múltiplas chaves simultâneas ou `kid`.
+- O build gera o relatório JaCoCo, mas ainda não impõe um limiar mínimo de
+  cobertura.
 
-## Artefatos gerados
+## Qualidade e artefatos
 
-- Relatório HTML navegável: `target/site/jacoco/index.html`
+- PMD: aprovado, sem violações.
+- CPD: relatório gerado; permanecem duas duplicações preexistentes entre os
+  mapeadores de movimentações de item/ferramenta, fora do escopo desta etapa.
+- Relatório HTML: `target/site/jacoco/index.html`
 - Relatório XML: `target/site/jacoco/jacoco.xml`
 - Relatório CSV: `target/site/jacoco/jacoco.csv`
-- Resultado dos testes: `target/surefire-reports/`
+- Resultados: `target/surefire-reports/`
