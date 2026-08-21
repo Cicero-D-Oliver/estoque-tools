@@ -1,6 +1,8 @@
 package com.equipe.estoque.config;
 
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -28,6 +30,19 @@ public class SecurityProperties {
     @NotNull
     private Duration accessTokenTtl = Duration.ofMinutes(15);
 
+    @NotNull
+    private Duration refreshTokenTtl = Duration.ofDays(30);
+
+    @NotNull
+    private Duration passwordResetTokenTtl = Duration.ofMinutes(30);
+
+    @Min(2)
+    @Max(20)
+    private int maxFailedLoginAttempts = 5;
+
+    @NotNull
+    private Duration loginLockDuration = Duration.ofMinutes(15);
+
     @AssertTrue(message = "A chave JWT deve estar em Base64 e conter pelo menos 32 bytes")
     public boolean isJwtSecretStrong() {
         try {
@@ -43,6 +58,27 @@ public class SecurityProperties {
         return accessTokenTtl != null
                 && accessTokenTtl.compareTo(Duration.ofMinutes(1)) >= 0
                 && accessTokenTtl.compareTo(Duration.ofMinutes(60)) <= 0;
+    }
+
+    @AssertTrue(message = "A duração do refresh token deve ficar entre 1 e 90 dias")
+    public boolean isRefreshTokenTtlSafe() {
+        return refreshTokenTtl != null
+                && refreshTokenTtl.compareTo(Duration.ofDays(1)) >= 0
+                && refreshTokenTtl.compareTo(Duration.ofDays(90)) <= 0;
+    }
+
+    @AssertTrue(message = "A duração do token de recuperação deve ficar entre 5 minutos e 2 horas")
+    public boolean isPasswordResetTokenTtlSafe() {
+        return passwordResetTokenTtl != null
+                && passwordResetTokenTtl.compareTo(Duration.ofMinutes(5)) >= 0
+                && passwordResetTokenTtl.compareTo(Duration.ofHours(2)) <= 0;
+    }
+
+    @AssertTrue(message = "O bloqueio de login deve ficar entre 1 minuto e 24 horas")
+    public boolean isLoginLockDurationSafe() {
+        return loginLockDuration != null
+                && loginLockDuration.compareTo(Duration.ofMinutes(1)) >= 0
+                && loginLockDuration.compareTo(Duration.ofHours(24)) <= 0;
     }
 
     public byte[] decodedSecret() {

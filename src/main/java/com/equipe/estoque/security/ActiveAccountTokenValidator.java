@@ -24,12 +24,25 @@ public class ActiveAccountTokenValidator implements OAuth2TokenValidator<Jwt> {
     public OAuth2TokenValidatorResult validate(Jwt token) {
         try {
             Long usuarioId = Long.valueOf(token.getSubject());
-            if (usuarioRepository.existsByIdAndAtivoTrueAndSenhaHashIsNotNull(usuarioId)) {
+            Long tokenVersion = tokenVersion(token);
+            if (tokenVersion != null
+                    && usuarioRepository.existsByIdAndAtivoTrueAndSenhaHashIsNotNullAndTokenVersion(
+                    usuarioId,
+                    tokenVersion
+            )) {
                 return OAuth2TokenValidatorResult.success();
             }
-        } catch (NumberFormatException exception) {
+        } catch (NumberFormatException | NullPointerException exception) {
             return OAuth2TokenValidatorResult.failure(INVALID_ACCOUNT);
         }
         return OAuth2TokenValidatorResult.failure(INVALID_ACCOUNT);
+    }
+
+    private Long tokenVersion(Jwt token) {
+        Object value = token.getClaims().get("ver");
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return value == null ? null : Long.valueOf(value.toString());
     }
 }

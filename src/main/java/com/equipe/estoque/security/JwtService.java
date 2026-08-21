@@ -28,6 +28,7 @@ public class JwtService {
                 .issuedAt(issuedAt)
                 .expiresAt(expiresAt)
                 .subject(usuario.getId().toString())
+                .claim("ver", usuario.getTokenVersion())
                 .id(UUID.randomUUID().toString())
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).type("JWT").build();

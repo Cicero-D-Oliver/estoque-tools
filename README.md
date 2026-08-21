@@ -2,7 +2,8 @@
 
 Backend REST para controlar usuários internos, itens consumíveis, ferramentas patrimoniais e seus históricos de movimentação. O projeto inicia localmente com SQLite e também oferece um ambiente Docker completo com PostgreSQL.
 
-> Esta versão não implementa autenticação ou autorização de usuários finais. Os perfis `ADMIN`, `OPERADOR` e `CONSULTA` são apenas dados cadastrais para uma etapa futura.
+> Esta versão implementa autenticação JWT, sessões renováveis e autorização por
+> membership ativa na organização. A interface gráfica permanece fora do escopo.
 
 ## Funcionalidades
 
@@ -15,6 +16,7 @@ Backend REST para controlar usuários internos, itens consumíveis, ferramentas 
 - Swagger UI, OpenAPI 3.1 e healthcheck operacional.
 - Perfis separados para SQLite e PostgreSQL.
 - Schema versionado por Flyway e validado pelo Hibernate.
+- JWT curto, refresh token rotativo, revogação de sessões e proteção contra força bruta.
 
 ## Arquitetura
 
@@ -198,10 +200,16 @@ O banco fica no volume `estoque_postgres_data`. `docker compose down -v` também
 | `DB_URL` | `jdbc:postgresql://localhost:5432/estoque_db` | conexão PostgreSQL |
 | `DB_USERNAME` | `estoque` | usuário PostgreSQL |
 | `DB_PASSWORD` | sem padrão | senha PostgreSQL obrigatória |
+| `APP_JWT_SECRET` | sem padrão | chave Base64 aleatória de, no mínimo, 32 bytes |
+| `APP_ACCESS_TOKEN_TTL` | `15m` | duração do JWT de acesso |
+| `APP_REFRESH_TOKEN_TTL` | `30d` | duração máxima do refresh token |
+| `APP_PASSWORD_RESET_TOKEN_TTL` | `30m` | validade da recuperação interna |
+| `APP_MAX_FAILED_LOGIN_ATTEMPTS` | `5` | falhas consecutivas antes do bloqueio |
+| `APP_LOGIN_LOCK_DURATION` | `15m` | duração do bloqueio temporário |
 | `FLYWAY_BASELINE_ON_MIGRATE` | `false` | opt-in exclusivo para incorporar SQLite legado já verificado |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | origens web permitidas, separadas por vírgula |
 | `CORS_ALLOWED_METHODS` | `GET,POST,PUT,DELETE,OPTIONS` | métodos CORS |
-| `CORS_ALLOWED_HEADERS` | `Content-Type,Accept,X-Correlation-Id` | cabeçalhos CORS |
+| `CORS_ALLOWED_HEADERS` | `Content-Type,Accept,Authorization,X-Correlation-Id,X-Organization-Id` | cabeçalhos CORS |
 | `CORS_ALLOW_CREDENTIALS` | `false` | envio de credenciais pelo navegador |
 | `CORS_MAX_AGE` | `3600` | cache do preflight em segundos |
 | `LOG_LEVEL_ROOT` | `INFO` | nível global de logs |
@@ -250,10 +258,10 @@ chmod +x scripts/linux-macos/*.sh
 mvn clean verify
 ```
 
-A suíte contém atualmente 24 testes. Eles atravessam HTTP, validação, services,
-repositories e SQLite, além de exercitar migrações Flyway, assinatura integral
-do baseline, rejeição de schemas legados incompatíveis e registro do callback
-na configuração Spring.
+A suíte contém atualmente 89 testes. Eles atravessam HTTP, validação, services,
+repositories, segurança, SQLite e PostgreSQL 17 via Testcontainers, além de
+exercitar migrações Flyway, assinatura integral do baseline, sessões rotativas,
+revogação, força bruta e isolamento entre organizações.
 
 Relatórios gerados:
 
@@ -279,8 +287,8 @@ Use `-KeepArtifacts` somente para diagnóstico local; o comportamento padrão é
 ### Integração contínua
 
 A pipeline `.github/workflows/ci.yml` usa Java 17 e cache Maven. Em pushes e
-pull requests ela executa `mvn clean verify`, exige no mínimo os 24 testes do
-baseline atual e confirma a execução das três classes de teste esperadas. O
+pull requests ela executa `mvn clean verify`, exige no mínimo os 89 testes do
+baseline atual e confirma a execução das dez classes de teste esperadas. O
 workflow rejeita falhas, erros, testes ignorados ou relatórios Surefire
 ausentes, mas permite que novos testes aumentem o total sem exigir manutenção
 da contagem. JaCoCo, PMD, CPD e o smoke test SQLite isolado continuam
@@ -367,17 +375,21 @@ Não há screenshots no repositório. Esta entrega contém somente o backend e a
 - CORS é restritivo e configurável.
 - Stacktraces, causas e mensagens técnicas não são devolvidos ao cliente.
 - Logs não registram payload, e-mail, senha ou stacktrace; usam IDs e referência.
-- Não há autenticação/autorização, por decisão de escopo desta etapa.
-- Swagger pode ser desligado em um ambiente público pelas variáveis indicadas acima.
+- Access JWT curto e refresh token rotativo protegem sessões; somente hashes dos
+  tokens opacos são persistidos.
+- Troca de senha e logout global revogam sessões anteriores.
+- Swagger fica desabilitado no profile de produção.
+
+Consulte [SECURITY.md](SECURITY.md) para política de força bruta, geração e
+rotação de `APP_JWT_SECRET` e o limite atual da recuperação de senha.
 
 ## Roadmap
 
-1. Adicionar autenticação e autorização por perfil com Spring Security.
-2. Executar as migrações PostgreSQL em instância real e adicionar Testcontainers.
-3. Paginar listagens e históricos potencialmente grandes.
-4. Tornar os dados de auditoria independentes de alterações cadastrais posteriores.
-5. Criar frontend e screenshots dos fluxos de usuário.
-6. Adicionar métricas, tracing e alertas; avaliar cache somente após medir a carga.
+1. Integrar um provedor confiável para entrega de tokens de recuperação de senha.
+2. Paginar listagens e históricos potencialmente grandes.
+3. Tornar os dados de auditoria independentes de alterações cadastrais posteriores.
+4. Criar frontend e screenshots dos fluxos de usuário.
+5. Adicionar métricas, tracing e alertas; avaliar cache somente após medir a carga.
 
 ## Relatórios e roteiro
 

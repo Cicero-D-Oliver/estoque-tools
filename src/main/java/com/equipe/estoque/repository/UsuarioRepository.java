@@ -13,7 +13,11 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     Optional<Usuario> findByEmailIgnoreCase(String email);
 
-    boolean existsByIdAndAtivoTrueAndSenhaHashIsNotNull(Long id);
+    boolean existsByIdAndAtivoTrueAndSenhaHashIsNotNullAndTokenVersion(Long id, Long tokenVersion);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM Usuario u WHERE LOWER(u.email) = LOWER(:email)")
+    Optional<Usuario> findByEmailIgnoreCaseForUpdate(String email);
 
     Optional<Usuario> findFirstByOrderByIdAsc();
 
