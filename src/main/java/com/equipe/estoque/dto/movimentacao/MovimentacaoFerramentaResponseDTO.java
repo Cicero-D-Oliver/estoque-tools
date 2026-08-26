@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Getter
 @Builder
@@ -26,11 +26,11 @@ public class MovimentacaoFerramentaResponseDTO {
     @Schema(nullable = true, example = "2") private Long responsavelAnteriorUsuarioId;
     @Schema(nullable = true, example = "Jorge Lima") private String responsavelAnteriorUsuarioNome;
     @Schema(example = "RETIRADA") private TipoMovimentacaoFerramenta tipoMovimentacao;
-    @Schema(example = "2026-08-04T10:15:30") private LocalDateTime dataHora;
+    @Schema(example = "2026-08-04T10:15:30Z") private OffsetDateTime dataHora;
     @Schema(example = "Uso na manutenção preventiva") private String observacao;
     @Schema(nullable = true, example = "Linha 3") private String destino;
     @Schema(example = "PENDENTE") private StatusRevisaoMovimentacao statusRevisao;
     @Schema(nullable = true, example = "1") private Long confirmadoPorUsuarioId;
     @Schema(nullable = true, example = "Cícero") private String confirmadoPorUsuarioNome;
-    @Schema(nullable = true, example = "2026-08-20T10:30:00") private LocalDateTime confirmadoEm;
+    @Schema(nullable = true, example = "2026-08-20T10:30:00Z") private OffsetDateTime confirmadoEm;
 }

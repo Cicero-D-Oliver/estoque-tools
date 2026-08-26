@@ -102,6 +102,40 @@ class ToolWithdrawalConcurrencyIntegrationTest {
                 .count());
     }
 
+    @Test
+    void duasConclusoesConcorrentesDevemProduzirSomenteUmEventoValido() throws Exception {
+        ConcurrentFixture fixture = createFixture();
+        MovimentacaoFerramentaRequestDTO maintenance = new MovimentacaoFerramentaRequestDTO();
+        ferramentaService.registrarManutencao(
+                fixture.organizationId(), fixture.toolId(), fixture.firstOperatorId(), maintenance
+        );
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> first = executor.submit(() -> attemptMaintenanceCompletion(
+                    fixture, fixture.firstOperatorId(), ready, start
+            ));
+            Future<Boolean> second = executor.submit(() -> attemptMaintenanceCompletion(
+                    fixture, fixture.secondOperatorId(), ready, start
+            ));
+            ready.await();
+            start.countDown();
+
+            assertEquals(1, (first.get() ? 1 : 0) + (second.get() ? 1 : 0));
+        } finally {
+            executor.shutdownNow();
+        }
+
+        var tool = ferramentaRepository.findById(fixture.toolId()).orElseThrow();
+        assertEquals(StatusFerramenta.DISPONIVEL, tool.getStatus());
+        assertEquals(1, movementRepository.findAllByOrganizacaoId(fixture.organizationId()).stream()
+                .filter(movement -> movement.getFerramenta().getId().equals(fixture.toolId()))
+                .filter(movement -> movement.getTipoMovimentacao()
+                        == TipoMovimentacaoFerramenta.CONCLUSAO_MANUTENCAO)
+                .count());
+    }
+
     private boolean attemptWithdrawal(
             ConcurrentFixture fixture,
             Long operatorId,
@@ -119,6 +153,31 @@ class ToolWithdrawalConcurrencyIntegrationTest {
                         fixture.toolId(),
                         operatorId,
                         request
+                );
+                return true;
+            }));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private boolean attemptMaintenanceCompletion(
+            ConcurrentFixture fixture,
+            Long operatorId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        ready.countDown();
+        try {
+            start.await();
+            return Boolean.TRUE.equals(new TransactionTemplate(transactionManager).execute(status -> {
+                MovimentacaoFerramentaRequestDTO request = new MovimentacaoFerramentaRequestDTO();
+                request.setObservacao("Conclusão concorrente");
+                ferramentaService.registrarConclusaoManutencao(
+                        fixture.organizationId(), fixture.toolId(), operatorId, request
                 );
                 return true;
             }));

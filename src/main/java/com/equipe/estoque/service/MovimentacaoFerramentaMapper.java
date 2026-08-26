@@ -4,6 +4,10 @@ import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaResponseDTO;
 import com.equipe.estoque.entity.MovimentacaoFerramenta;
 import com.equipe.estoque.entity.Usuario;
 
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+
 final class MovimentacaoFerramentaMapper {
 
     private MovimentacaoFerramentaMapper() {
@@ -25,13 +29,17 @@ final class MovimentacaoFerramentaMapper {
                 .responsavelAnteriorUsuarioId(previousResponsible == null ? null : previousResponsible.getId())
                 .responsavelAnteriorUsuarioNome(previousResponsible == null ? null : previousResponsible.getNome())
                 .tipoMovimentacao(movement.getTipoMovimentacao())
-                .dataHora(movement.getDataHora())
+                .dataHora(toUtc(movement.getDataHora()))
                 .observacao(movement.getObservacao())
                 .destino(movement.getDestino())
                 .statusRevisao(movement.getStatusRevisao())
                 .confirmadoPorUsuarioId(confirmedBy == null ? null : confirmedBy.getId())
                 .confirmadoPorUsuarioNome(confirmedBy == null ? null : confirmedBy.getNome())
-                .confirmadoEm(movement.getConfirmadoEm())
+                .confirmadoEm(toUtc(movement.getConfirmadoEm()))
                 .build();
+    }
+
+    private static OffsetDateTime toUtc(LocalDateTime value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 }

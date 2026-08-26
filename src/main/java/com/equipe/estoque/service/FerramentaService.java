@@ -2,6 +2,7 @@ package com.equipe.estoque.service;
 
 import com.equipe.estoque.dto.ferramenta.FerramentaRequestDTO;
 import com.equipe.estoque.dto.ferramenta.FerramentaResponseDTO;
+import com.equipe.estoque.dto.ferramenta.ResponsavelTransferenciaResponseDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaRequestDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaResponseDTO;
 import com.equipe.estoque.entity.Ferramenta;
@@ -26,6 +27,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
@@ -78,6 +80,20 @@ public class FerramentaService {
         organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
         return ferramentaRepository.findAllByOrganizacaoId(organizacaoId)
                 .stream().map(this::paraResponseDTO).toList();
+    }
+
+    public List<ResponsavelTransferenciaResponseDTO> listarResponsaveisTransferencia(Long organizacaoId) {
+        organizacaoService.buscarOrganizacaoAtiva(organizacaoId);
+        return membroRepository.findResponsaveisAptos(
+                        organizacaoId,
+                        StatusMembroOrganizacao.ATIVO,
+                        List.of(PerfilMembroOrganizacao.ADMIN, PerfilMembroOrganizacao.OPERADOR)
+                ).stream()
+                .map(membro -> ResponsavelTransferenciaResponseDTO.builder()
+                        .id(membro.getUsuario().getId())
+                        .nome(membro.getUsuario().getNome())
+                        .build())
+                .toList();
     }
 
     public FerramentaResponseDTO buscarPorId(Long id) {
@@ -287,6 +303,33 @@ public class FerramentaService {
     }
 
     @Transactional
+    public MovimentacaoFerramentaResponseDTO registrarConclusaoManutencao(
+            Long organizacaoId,
+            Long ferramentaId,
+            Long executorUsuarioId,
+            MovimentacaoFerramentaRequestDTO dto
+    ) {
+        Usuario usuario = requireOperationalMember(organizacaoId, executorUsuarioId).getUsuario();
+        Ferramenta ferramenta = buscarFerramentaAtivaParaAtualizacao(organizacaoId, ferramentaId);
+        if (ferramenta.getStatus() != StatusFerramenta.MANUTENCAO) {
+            throw new BusinessException("Somente uma ferramenta em manutenção pode ter a manutenção concluída");
+        }
+        LocalDateTime operationTime = now();
+        ferramenta.setStatus(StatusFerramenta.DISPONIVEL);
+        ferramenta.setResponsavelAtual(null);
+        ferramenta.setResponsavelDesde(null);
+        ferramenta.setDestinoAtual(null);
+        ferramentaRepository.saveAndFlush(ferramenta);
+        MovimentacaoFerramenta movimentacao = salvarMovimentacao(
+                ferramenta, usuario, null, null,
+                TipoMovimentacaoFerramenta.CONCLUSAO_MANUTENCAO, operationTime,
+                dto.getObservacao(), null);
+        log.info("Conclusão de manutenção registrada ferramentaId={} organizacaoId={} usuarioId={}",
+                ferramenta.getId(), organizacaoId, usuario.getId());
+        return MovimentacaoFerramentaMapper.toResponse(movimentacao);
+    }
+
+    @Transactional
     public MovimentacaoFerramentaResponseDTO registrarPerda(
             Long organizacaoId,
             Long ferramentaId,
@@ -466,7 +509,7 @@ public class FerramentaService {
                 .categoria(ferramenta.getCategoria()).status(ferramenta.getStatus())
                 .responsavelAtualId(responsavel != null ? responsavel.getId() : null)
                 .responsavelAtualNome(responsavel != null ? responsavel.getNome() : null)
-                .responsavelDesde(ferramenta.getResponsavelDesde())
+                .responsavelDesde(toUtc(ferramenta.getResponsavelDesde()))
                 .destinoAtual(ferramenta.getDestinoAtual())
                 .localizacao(ferramenta.getLocalizacao()).ativo(ferramenta.getAtivo()).build();
     }
@@ -497,5 +540,9 @@ public class FerramentaService {
 
     private LocalDateTime now() {
         return LocalDateTime.now(ZoneOffset.UTC);
+    }
+
+    private OffsetDateTime toUtc(LocalDateTime value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 }

@@ -32,6 +32,22 @@ public interface OrganizacaoMembroRepository extends JpaRepository<OrganizacaoMe
     @EntityGraph(attributePaths = {"organizacao", "usuario", "aprovadoPorUsuario"})
     List<OrganizacaoMembro> findByOrganizacaoIdOrderByUsuarioNomeAscIdAsc(Long organizacaoId);
 
+    @EntityGraph(attributePaths = {"organizacao", "usuario"})
+    @Query("""
+            SELECT m FROM OrganizacaoMembro m
+             WHERE m.organizacao.id = :organizacaoId
+               AND m.organizacao.ativa = true
+               AND m.usuario.ativo = true
+               AND m.status = :status
+               AND m.perfil IN :perfis
+             ORDER BY m.usuario.nome ASC, m.usuario.id ASC
+            """)
+    List<OrganizacaoMembro> findResponsaveisAptos(
+            @Param("organizacaoId") Long organizacaoId,
+            @Param("status") StatusMembroOrganizacao status,
+            @Param("perfis") List<PerfilMembroOrganizacao> perfis
+    );
+
     @EntityGraph(attributePaths = {"organizacao", "usuario", "aprovadoPorUsuario"})
     Optional<OrganizacaoMembro> findByIdAndOrganizacaoId(Long id, Long organizacaoId);
 

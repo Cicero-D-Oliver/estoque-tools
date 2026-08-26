@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,9 +46,9 @@ class ToolOperationalWorkflowIntegrationTest extends SecurityTestSupport {
                 "observacao", "Uso em campo"
         ), 201);
 
-        LocalDateTime recordedAt = LocalDateTime.parse(movement.get("dataHora").asText());
-        assertFalse(recordedAt.isBefore(before));
-        assertTrue(recordedAt.isBefore(LocalDateTime.now(ZoneOffset.UTC).plusSeconds(1)));
+        OffsetDateTime recordedAt = OffsetDateTime.parse(movement.get("dataHora").asText());
+        assertFalse(recordedAt.toLocalDateTime().isBefore(before));
+        assertTrue(recordedAt.toLocalDateTime().isBefore(LocalDateTime.now(ZoneOffset.UTC).plusSeconds(1)));
         assertTrue(movement.get("usuarioId").asLong() == operator.accountId());
         assertTrue("Uso em campo".equals(movement.get("observacao").asText()));
         assertTrue("PENDENTE".equals(movement.get("statusRevisao").asText()));
