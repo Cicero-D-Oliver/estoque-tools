@@ -2,6 +2,7 @@ package com.equipe.estoque.controller;
 
 import com.equipe.estoque.dto.ferramenta.FerramentaRequestDTO;
 import com.equipe.estoque.dto.ferramenta.FerramentaResponseDTO;
+import com.equipe.estoque.dto.ferramenta.ResponsavelTransferenciaResponseDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaRequestDTO;
 import com.equipe.estoque.dto.movimentacao.MovimentacaoFerramentaResponseDTO;
 import com.equipe.estoque.security.AuthenticatedAccount;
@@ -67,6 +68,18 @@ public class FerramentaController {
             @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId
     ) {
         return ResponseEntity.ok(ferramentaService.listarTodas(organizacaoId));
+    }
+
+    @GetMapping("/responsaveis-transferencia")
+    @PreAuthorize("@organizationAuthorization.canOperate(#organizacaoId, authentication)")
+    @Operation(
+            summary = "Listar responsáveis para transferência",
+            description = "Retorna somente membros ADMIN ou OPERADOR ativos da organização selecionada."
+    )
+    public ResponseEntity<List<ResponsavelTransferenciaResponseDTO>> listarResponsaveisTransferencia(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId
+    ) {
+        return ResponseEntity.ok(ferramentaService.listarResponsaveisTransferencia(organizacaoId));
     }
 
     @GetMapping("/{id}")
@@ -149,6 +162,21 @@ public class FerramentaController {
             @Valid @RequestBody MovimentacaoFerramentaRequestDTO dto
     ) {
         return created(ferramentaService.registrarManutencao(
+                organizacaoId, id, authenticatedAccount.id(), dto));
+    }
+
+    @PostMapping("/{id}/conclusao-manutencao")
+    @PreAuthorize("@organizationAuthorization.canOperate(#organizacaoId, authentication)")
+    @Operation(
+            summary = "Concluir manutenção",
+            description = "Retorna a ferramenta ao estado disponível e registra um novo evento imutável."
+    )
+    public ResponseEntity<MovimentacaoFerramentaResponseDTO> registrarConclusaoManutencao(
+            @RequestHeader(OrganizationAuthorization.HEADER_NAME) @Positive Long organizacaoId,
+            @PathVariable @Positive Long id,
+            @Valid @RequestBody MovimentacaoFerramentaRequestDTO dto
+    ) {
+        return created(ferramentaService.registrarConclusaoManutencao(
                 organizacaoId, id, authenticatedAccount.id(), dto));
     }
 

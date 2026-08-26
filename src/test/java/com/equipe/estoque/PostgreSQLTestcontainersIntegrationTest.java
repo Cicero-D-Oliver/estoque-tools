@@ -18,6 +18,7 @@ import com.equipe.estoque.enums.PerfilMembroOrganizacao;
 import com.equipe.estoque.enums.PerfilUsuario;
 import com.equipe.estoque.enums.StatusMembroOrganizacao;
 import com.equipe.estoque.enums.StatusRevisaoMovimentacao;
+import com.equipe.estoque.enums.TipoMovimentacaoFerramenta;
 import com.equipe.estoque.exception.BusinessException;
 import com.equipe.estoque.exception.ResourceNotFoundException;
 import com.equipe.estoque.repository.FerramentaRepository;
@@ -57,6 +58,7 @@ import java.util.Map;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -158,12 +160,12 @@ class PostgreSQLTestcontainersIntegrationTest {
                  WHERE version IS NOT NULL
                  ORDER BY installed_rank
                 """);
-        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), migrations.stream()
+        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), migrations.stream()
                 .map(migration -> migration.get("version").toString())
                 .toList());
         assertTrue(migrations.stream()
                 .allMatch(migration -> Boolean.TRUE.equals(migration.get("success"))));
-        assertEquals("7", flyway.info().current().getVersion().toString());
+        assertEquals("8", flyway.info().current().getVersion().toString());
         assertEquals(2, jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                   FROM information_schema.tables
@@ -482,14 +484,23 @@ class PostgreSQLTestcontainersIntegrationTest {
         MovimentacaoFerramentaResponseDTO confirmed = movimentacaoFerramentaService.confirmar(
                 organization.getId(), transferred.getId(), admin.getId()
         );
+        MovimentacaoFerramentaResponseDTO maintenance = ferramentaService.registrarManutencao(
+                organization.getId(), toolId, target.getId(), new MovimentacaoFerramentaRequestDTO()
+        );
+        MovimentacaoFerramentaResponseDTO completion = ferramentaService.registrarConclusaoManutencao(
+                organization.getId(), toolId, target.getId(), new MovimentacaoFerramentaRequestDTO()
+        );
 
         assertEquals(StatusRevisaoMovimentacao.PENDENTE, first.getStatusRevisao());
         assertEquals(operator.getId(), transferred.getResponsavelAnteriorUsuarioId());
         assertEquals(target.getId(), transferred.getResponsavelUsuarioId());
         assertEquals(StatusRevisaoMovimentacao.CONFIRMADA, confirmed.getStatusRevisao());
         Ferramenta tool = ferramentaRepository.findById(toolId).orElseThrow();
-        assertEquals(target.getId(), tool.getResponsavelAtual().getId());
-        assertEquals("Linha PostgreSQL", tool.getDestinoAtual());
+        assertEquals(TipoMovimentacaoFerramenta.MANUTENCAO, maintenance.getTipoMovimentacao());
+        assertEquals(TipoMovimentacaoFerramenta.CONCLUSAO_MANUTENCAO, completion.getTipoMovimentacao());
+        assertEquals(com.equipe.estoque.enums.StatusFerramenta.DISPONIVEL, tool.getStatus());
+        assertEquals(null, tool.getResponsavelAtual());
+        assertEquals(null, tool.getDestinoAtual());
     }
 
     @Test
@@ -570,12 +581,12 @@ class PostgreSQLTestcontainersIntegrationTest {
                        AND senha_alterada_em IS NULL
                        AND ultimo_login_em IS NULL
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), historyVersions(statement));
         }
     }
 
     @Test
-    void deveMigrarSchemaPostgresqlPopuladoDeV5ParaV7SemPerderCredencial() throws Exception {
+    void deveMigrarSchemaPostgresqlPopuladoDeV5AteV8SemPerderCredencial() throws Exception {
         String schema = "legacy_v5_to_v6";
         flywayForSchema(schema, "5").migrate();
         try (Connection connection = legacyConnection(schema);
@@ -610,12 +621,12 @@ class PostgreSQLTestcontainersIntegrationTest {
                     """));
             assertEquals(0, scalar(statement, "SELECT COUNT(*) FROM refresh_tokens"));
             assertEquals(0, scalar(statement, "SELECT COUNT(*) FROM tokens_recuperacao_senha"));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), historyVersions(statement));
         }
     }
 
     @Test
-    void deveMigrarSchemaOperacionalPopuladoDeV6ParaV7SemPerderHistorico() throws Exception {
+    void deveMigrarSchemaOperacionalPopuladoDeV6AteV8SemPerderHistorico() throws Exception {
         String schema = "legacy_v6_to_v7_tool";
         flywayForSchema(schema, "6").migrate();
         try (Connection connection = legacyConnection(schema);
@@ -687,7 +698,103 @@ class PostgreSQLTestcontainersIntegrationTest {
                        AND confirmado_por_usuario_id IS NULL
                        AND confirmado_em IS NULL
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), historyVersions(statement));
+        }
+    }
+
+    @Test
+    void deveMigrarSchemaPostgresqlPopuladoDeV7ParaV8PreservandoDadosEConstraint() throws Exception {
+        String schema = "legacy_v7_to_v8_tool";
+        flywayForSchema(schema, "7").migrate();
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO usuarios (
+                        id, nome, email, perfil, ativo, versao,
+                        token_version, tentativas_login_falhas
+                    ) VALUES (1201, 'Operador PG V7', 'operador-pg-v7@example.com',
+                              'OPERADOR', TRUE, 4, 0, 0)
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO organizacoes (
+                        id, versao, nome, ativa, criada_em, criada_por_usuario_id
+                    ) VALUES (1202, 2, 'Organização PG V7', TRUE,
+                              TIMESTAMP '2026-08-25 08:00:00', 1201)
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO organizacao_membros (
+                        id, versao, organizacao_id, usuario_id, perfil, status,
+                        solicitado_em, aprovado_em, aprovado_por_usuario_id
+                    ) VALUES (1203, 1, 1202, 1201, 'OPERADOR', 'ATIVO',
+                              TIMESTAMP '2026-08-25 08:00:00',
+                              TIMESTAMP '2026-08-25 08:05:00', 1201)
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO ferramentas (
+                        id, versao, organizacao_id, patrimonio, nome, categoria,
+                        status, responsavel_atual_id, responsavel_desde,
+                        destino_atual, localizacao, ativo
+                    ) VALUES (1204, 9, 1202, 'V7-POSTGRESQL', 'Ferramenta PG V7', 'Teste',
+                              'MANUTENCAO', NULL, NULL, NULL, 'Armário 7', TRUE)
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO movimentacoes_ferramenta (
+                        id, versao, organizacao_id, ferramenta_id, usuario_id,
+                        responsavel_usuario_id, responsavel_anterior_usuario_id,
+                        tipo_movimentacao, data_hora, observacao, destino,
+                        status_revisao, confirmado_por_usuario_id, confirmado_em
+                    ) VALUES (
+                        1205, 3, 1202, 1204, 1201, NULL, 1201,
+                        'MANUTENCAO', TIMESTAMP '2026-08-25 09:00:00',
+                        'Movimento PG V7', 'Linha 7', 'CONFIRMADA',
+                        1201, TIMESTAMP '2026-08-25 09:10:00'
+                    )
+                    """);
+        }
+
+        flywayForSchema(schema, null).migrate();
+
+        try (Connection connection = legacyConnection(schema);
+             Statement statement = connection.createStatement()) {
+            assertEquals(1, scalar(statement, """
+                    SELECT COUNT(*) FROM movimentacoes_ferramenta
+                     WHERE id = 1205
+                       AND versao = 3
+                       AND organizacao_id = 1202
+                       AND ferramenta_id = 1204
+                       AND usuario_id = 1201
+                       AND responsavel_anterior_usuario_id = 1201
+                       AND tipo_movimentacao = 'MANUTENCAO'
+                       AND data_hora = TIMESTAMP '2026-08-25 09:00:00'
+                       AND observacao = 'Movimento PG V7'
+                       AND destino = 'Linha 7'
+                       AND status_revisao = 'CONFIRMADA'
+                       AND confirmado_por_usuario_id = 1201
+                       AND confirmado_em = TIMESTAMP '2026-08-25 09:10:00'
+                    """));
+            statement.executeUpdate("""
+                    INSERT INTO movimentacoes_ferramenta (
+                        id, versao, organizacao_id, ferramenta_id, usuario_id,
+                        tipo_movimentacao, data_hora, status_revisao
+                    ) VALUES (1206, 0, 1202, 1204, 1201,
+                              'CONCLUSAO_MANUTENCAO',
+                              TIMESTAMP '2026-08-25 10:00:00', 'PENDENTE')
+                    """);
+            assertThrows(SQLException.class, () -> statement.executeUpdate("""
+                    INSERT INTO movimentacoes_ferramenta (
+                        id, versao, organizacao_id, ferramenta_id, usuario_id,
+                        tipo_movimentacao, data_hora, status_revisao
+                    ) VALUES (1207, 0, 1202, 1204, 1201,
+                              'TIPO_INVALIDO',
+                              TIMESTAMP '2026-08-25 10:05:00', 'PENDENTE')
+                    """));
+            assertEquals(1, scalar(statement, """
+                    SELECT COUNT(*) FROM pg_indexes
+                     WHERE schemaname = current_schema()
+                       AND indexname = 'idx_mov_ferramenta_organizacao_revisao_id'
+                    """));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"),
+                    historyVersions(statement));
         }
     }
 
@@ -769,7 +876,7 @@ class PostgreSQLTestcontainersIntegrationTest {
             assertEquals(5, scalar(statement, """
                     SELECT versao FROM ferramentas WHERE id = 301
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), historyVersions(statement));
         }
     }
 

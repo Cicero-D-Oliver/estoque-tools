@@ -56,7 +56,7 @@ class SQLiteLegacyBaselineCallbackTest {
     }
 
     @Test
-    void deveAceitarLegadoConhecidoAplicarAteV7EPreservarDados() throws Exception {
+    void deveAceitarLegadoConhecidoAplicarAteV8EPreservarDados() throws Exception {
         DataSource dataSource = createKnownLegacyDatabase("compatible.db");
         Map<String, String> hashesBefore = canonicalDataHashes(dataSource);
 
@@ -64,7 +64,7 @@ class SQLiteLegacyBaselineCallbackTest {
 
         assertEquals(hashesBefore, canonicalDataHashes(dataSource));
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:BASELINE:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1", "6:SQL:1", "7:SQL:1");
+            assertHistory(connection, "1:BASELINE:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1", "6:SQL:1", "7:SQL:1", "8:SQL:1");
             assertEquals(9, countApplicationTables(connection));
             assertEquals(1, countRows(connection, "organizacoes"));
             assertEquals(3, countRows(connection, "organizacao_membros"));
@@ -98,13 +98,13 @@ class SQLiteLegacyBaselineCallbackTest {
     }
 
     @Test
-    void bancoNovoVazioDeveAplicarV1AteV7SemBaseline() throws Exception {
+    void bancoNovoVazioDeveAplicarV1AteV8SemBaseline() throws Exception {
         DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("empty.db"));
 
         migrate(dataSource, true);
 
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1", "6:SQL:1", "7:SQL:1");
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1", "6:SQL:1", "7:SQL:1", "8:SQL:1");
             assertEquals(9, countApplicationTables(connection));
             assertEquals(0, countRows(connection, "organizacoes"));
             assertEquals(0, foreignKeyViolationCount(connection));
@@ -155,7 +155,7 @@ class SQLiteLegacyBaselineCallbackTest {
 
         assertEquals(hashesBefore, canonicalDataHashes(dataSource));
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1", "6:SQL:1", "7:SQL:1");
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1", "6:SQL:1", "7:SQL:1", "8:SQL:1");
             assertEquals(1, countRows(connection, "usuarios"));
             assertEquals(1, countRows(connection, "organizacoes"));
             assertEquals(1, countRows(connection, "organizacao_membros"));
@@ -179,7 +179,7 @@ class SQLiteLegacyBaselineCallbackTest {
         migrate(dataSource, false);
 
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1", "6:SQL:1", "7:SQL:1");
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1", "6:SQL:1", "7:SQL:1", "8:SQL:1");
             assertEquals(1, countRows(connection, "usuarios"));
             try (Statement statement = connection.createStatement();
                  ResultSet result = statement.executeQuery("""
@@ -217,7 +217,7 @@ class SQLiteLegacyBaselineCallbackTest {
 
         assertEquals(hashesBefore, canonicalDataHashes(dataSource));
         try (Connection connection = dataSource.getConnection()) {
-            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1", "6:SQL:1", "7:SQL:1");
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1", "5:SQL:1", "6:SQL:1", "7:SQL:1", "8:SQL:1");
             assertEquals(1, countRows(connection, "usuarios"));
             assertEquals(0, countRows(connection, "refresh_tokens"));
             assertEquals(0, countRows(connection, "tokens_recuperacao_senha"));
@@ -246,7 +246,7 @@ class SQLiteLegacyBaselineCallbackTest {
     }
 
     @Test
-    void deveMigrarBancoOperacionalPopuladoDeV6ParaV7SemPerderHistorico() throws Exception {
+    void deveMigrarBancoOperacionalPopuladoDeV6AteV8SemPerderHistorico() throws Exception {
         DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("v6-to-v7.db"));
         migrateToVersion6(dataSource);
         try (Connection connection = dataSource.getConnection()) {
@@ -300,7 +300,7 @@ class SQLiteLegacyBaselineCallbackTest {
         assertEquals(hashesBefore, canonicalDataHashes(dataSource));
         try (Connection connection = dataSource.getConnection()) {
             assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1",
-                    "5:SQL:1", "6:SQL:1", "7:SQL:1");
+                    "5:SQL:1", "6:SQL:1", "7:SQL:1", "8:SQL:1");
             try (Statement statement = connection.createStatement();
                  ResultSet result = statement.executeQuery("""
                          SELECT responsavel_atual_id, responsavel_desde, destino_atual
@@ -323,6 +323,94 @@ class SQLiteLegacyBaselineCallbackTest {
                 assertEquals(null, result.getString("confirmado_por_usuario_id"));
                 assertEquals(null, result.getString("confirmado_em"));
             }
+            assertEquals(0, foreignKeyViolationCount(connection));
+        }
+    }
+
+    @Test
+    void deveMigrarSchemaSQLitePopuladoDeV7ParaV8PreservandoDadosEConstraints() throws Exception {
+        DataSource dataSource = sqliteDataSource(temporaryDirectory.resolve("v7-to-v8.db"));
+        migrateToVersion7(dataSource);
+        String movementHashBefore;
+        try (Connection connection = dataSource.getConnection()) {
+            execute(connection, """
+                    INSERT INTO usuarios (
+                        id, versao, nome, email, perfil, ativo,
+                        token_version, tentativas_login_falhas
+                    ) VALUES (1201, 4, 'Operador V7', 'operador-v7@example.com',
+                              'OPERADOR', 1, 0, 0)
+                    """);
+            execute(connection, """
+                    INSERT INTO organizacoes (
+                        id, versao, nome, ativa, criada_em, criada_por_usuario_id
+                    ) VALUES (1202, 2, 'Organização V7', 1,
+                              '2026-08-25 08:00:00', 1201)
+                    """);
+            execute(connection, """
+                    INSERT INTO organizacao_membros (
+                        id, versao, organizacao_id, usuario_id, perfil, status,
+                        solicitado_em, aprovado_em, aprovado_por_usuario_id
+                    ) VALUES (1203, 1, 1202, 1201, 'OPERADOR', 'ATIVO',
+                              '2026-08-25 08:00:00', '2026-08-25 08:05:00', 1201)
+                    """);
+            execute(connection, """
+                    INSERT INTO ferramentas (
+                        id, versao, organizacao_id, patrimonio, nome, categoria,
+                        status, responsavel_atual_id, responsavel_desde,
+                        destino_atual, localizacao, ativo
+                    ) VALUES (1204, 9, 1202, 'V7-SQLITE', 'Ferramenta V7', 'Teste',
+                              'MANUTENCAO', NULL, NULL, NULL, 'Armário 7', 1)
+                    """);
+            execute(connection, """
+                    INSERT INTO movimentacoes_ferramenta (
+                        id, versao, organizacao_id, ferramenta_id, usuario_id,
+                        responsavel_usuario_id, responsavel_anterior_usuario_id,
+                        tipo_movimentacao, data_hora, observacao, destino,
+                        status_revisao, confirmado_por_usuario_id, confirmado_em
+                    ) VALUES (
+                        1205, 3, 1202, 1204, 1201, NULL, 1201,
+                        'MANUTENCAO', '2026-08-25 09:00:00', 'Movimento V7', 'Linha 7',
+                        'CONFIRMADA', 1201, '2026-08-25 09:10:00'
+                    )
+                    """);
+            movementHashBefore = hashRows(connection, """
+                    SELECT id, versao, organizacao_id, ferramenta_id, usuario_id,
+                           responsavel_usuario_id, responsavel_anterior_usuario_id,
+                           tipo_movimentacao, data_hora, observacao, destino,
+                           status_revisao, confirmado_por_usuario_id, confirmado_em
+                      FROM movimentacoes_ferramenta ORDER BY id
+                    """);
+        }
+
+        migrate(dataSource, false);
+
+        try (Connection connection = dataSource.getConnection()) {
+            assertEquals(movementHashBefore, hashRows(connection, """
+                    SELECT id, versao, organizacao_id, ferramenta_id, usuario_id,
+                           responsavel_usuario_id, responsavel_anterior_usuario_id,
+                           tipo_movimentacao, data_hora, observacao, destino,
+                           status_revisao, confirmado_por_usuario_id, confirmado_em
+                      FROM movimentacoes_ferramenta ORDER BY id
+                    """));
+            assertEquals(1, countRows(connection, "movimentacoes_ferramenta"));
+            assertEquals(0, foreignKeyViolationCount(connection));
+            assertTrue(indexExists(connection, "idx_mov_ferramenta_organizacao_revisao_id"));
+            execute(connection, """
+                    INSERT INTO movimentacoes_ferramenta (
+                        id, versao, organizacao_id, ferramenta_id, usuario_id,
+                        tipo_movimentacao, data_hora, status_revisao
+                    ) VALUES (1206, 0, 1202, 1204, 1201,
+                              'CONCLUSAO_MANUTENCAO', '2026-08-25 10:00:00', 'PENDENTE')
+                    """);
+            assertThrows(SQLException.class, () -> execute(connection, """
+                    INSERT INTO movimentacoes_ferramenta (
+                        id, versao, organizacao_id, ferramenta_id, usuario_id,
+                        tipo_movimentacao, data_hora, status_revisao
+                    ) VALUES (1207, 0, 1202, 1204, 1201,
+                              'TIPO_INVALIDO', '2026-08-25 10:05:00', 'PENDENTE')
+                    """));
+            assertHistory(connection, "1:SQL:1", "2:SQL:1", "3:SQL:1", "4:SQL:1",
+                    "5:SQL:1", "6:SQL:1", "7:SQL:1", "8:SQL:1");
             assertEquals(0, foreignKeyViolationCount(connection));
         }
     }
@@ -482,6 +570,15 @@ class SQLiteLegacyBaselineCallbackTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration/sqlite")
                 .target("6")
+                .load()
+                .migrate();
+    }
+
+    private static void migrateToVersion7(DataSource dataSource) {
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration/sqlite")
+                .target("7")
                 .load()
                 .migrate();
     }
@@ -686,6 +783,20 @@ class SQLiteLegacyBaselineCallbackTest {
                 """;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, table);
+            try (ResultSet result = statement.executeQuery()) {
+                return result.getInt(1) > 0;
+            }
+        }
+    }
+
+    private static boolean indexExists(Connection connection, String index) throws SQLException {
+        String sql = """
+                SELECT COUNT(*)
+                  FROM sqlite_schema
+                 WHERE type = 'index' AND name = ?
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, index);
             try (ResultSet result = statement.executeQuery()) {
                 return result.getInt(1) > 0;
             }
