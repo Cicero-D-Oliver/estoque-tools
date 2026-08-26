@@ -1,5 +1,9 @@
 # Build e cobertura
 target/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/vitest-results.json
 
 # Bancos e arquivos locais
 *.db
@@ -32,3 +36,6 @@ Thumbs.db
 *.log
 *.tmp
 *.swp
+
+# Cache de ferramentas frontend
+frontend/.vite/
