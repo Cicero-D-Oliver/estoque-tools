@@ -18,7 +18,7 @@ import { OrganizationSwitcher } from './OrganizationSwitcher'
 import { StatusBadge } from './StatusBadge'
 
 const navigation = [
-  { to: '/app/dashboard', label: 'Dashboard', icon: Gauge },
+  { to: '/app/dashboard', label: 'Início', icon: Gauge },
   { to: '/app/ferramentas', label: 'Ferramentas', icon: Boxes },
   { to: '/app/estoque', label: 'Estoque', icon: PackageOpen },
   { to: '/app/movimentacoes', label: 'Movimentações', icon: ClipboardList },
@@ -73,7 +73,6 @@ export function AppShell() {
               <Menu size={22} />
             </button>
             <div>
-              <span className="eyebrow">Visão operacional</span>
               <strong>{current?.label ?? 'Estoque Tools'}</strong>
             </div>
           </div>

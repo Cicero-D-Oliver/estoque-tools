@@ -25,10 +25,7 @@ export function Dialog({ open, title, children, onClose }: DialogProps) {
     }}>
       <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
         <header>
-          <div>
-            <span className="eyebrow">Novo ambiente</span>
-            <h2 id="dialog-title">{title}</h2>
-          </div>
+          <h2 className="dialog__title" id="dialog-title">{title}</h2>
           <button className="icon-button" onClick={onClose} aria-label="Fechar janela">
             <X size={20} />
           </button>

@@ -43,13 +43,13 @@ export function LoginPage() {
       if (error instanceof ApiError && error.status === 0) {
         setSubmitError('Não foi possível conectar ao servidor. Verifique sua rede e tente novamente.')
       } else {
-        setSubmitError('E-mail ou senha inválidos. Se o acesso estiver temporariamente indisponível, aguarde e tente novamente.')
+        setSubmitError('E-mail ou senha incorretos.')
       }
     }
   }
 
   return (
-    <AuthLayout title="Bem-vindo de volta" subtitle="Entre para acessar o ambiente da sua organização.">
+    <AuthLayout compact>
       <form className="auth-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
         {submitError && <div className="alert alert--error" role="alert">{submitError}</div>}
         <Field
@@ -72,9 +72,9 @@ export function LoginPage() {
           onChange={(event) => setSenha(event.target.value)}
         />
         <Button type="submit" loading={status === 'authenticating'}>
-          Entrar no Estoque Tools
+          Entrar
         </Button>
-        <p className="auth-form__switch">Ainda não possui uma conta? <Link to="/cadastro">Criar conta</Link></p>
+        <Link className="auth-form__switch auth-form__switch--link" to="/cadastro">Criar conta</Link>
       </form>
     </AuthLayout>
   )

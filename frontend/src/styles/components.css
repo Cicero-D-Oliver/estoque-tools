@@ -311,12 +311,12 @@
 
 .dialog > header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-4);
 }
 
-.dialog h2 { margin: 0; font-size: 1.35rem; }
+.dialog h2.dialog__title { margin: 0; color: var(--blue-700); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
 .dialog-form { display: grid; gap: var(--space-5); }
 .dialog-form__actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 

@@ -140,7 +140,7 @@ jobs:
         run: npm run test -- --reporter=json --outputFile=vitest-results.json
 
       - name: Validar resultado dos testes
-        run: node scripts/verify-test-results.mjs vitest-results.json 18
+        run: node scripts/verify-test-results.mjs vitest-results.json 33
 
       - name: Build de produção
         run: npm run build

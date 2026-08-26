@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
@@ -39,7 +40,10 @@ export function RegisterPage() {
   }
 
   return (
-    <AuthLayout title="Crie seu acesso" subtitle="Comece com uma conta e configure seu primeiro ambiente.">
+    <AuthLayout compact>
+      <Link className="auth-back-link" to="/login" aria-label="Voltar para o login">
+        <ArrowLeft size={20} aria-hidden="true" />
+      </Link>
       <form className="auth-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
         {submitError && <div className="alert alert--error" role="alert">{submitError}</div>}
         <Field label="Nome completo" name="nome" autoComplete="name" placeholder="Seu nome"
@@ -49,10 +53,9 @@ export function RegisterPage() {
           value={form.email} error={errors.email}
           onChange={(event) => setForm({ ...form, email: event.target.value })} />
         <PasswordInput label="Senha" name="senha" autoComplete="new-password"
-          hint="Use de 12 a 72 caracteres." value={form.senha} error={errors.senha}
+          hint="12 a 72 caracteres" value={form.senha} error={errors.senha}
           onChange={(event) => setForm({ ...form, senha: event.target.value })} />
         <Button type="submit" loading={status === 'authenticating'}>Criar minha conta</Button>
-        <p className="auth-form__switch">Já possui uma conta? <Link to="/login">Entrar</Link></p>
       </form>
     </AuthLayout>
   )
