@@ -16,6 +16,7 @@ const movementTypeLabels: Record<ToolMovement['tipoMovimentacao'], string> = {
   DEVOLUCAO: 'Devolução',
   TRANSFERENCIA: 'Transferência',
   MANUTENCAO: 'Manutenção',
+  CONCLUSAO_MANUTENCAO: 'Manutenção concluída',
   PERDA: 'Perda',
   CORRECAO: 'Correção',
 }
@@ -32,6 +33,8 @@ function movementSentence(movement: ToolMovement): string {
       return `${movement.usuarioNome} transferiu ${tool}${movement.responsavelUsuarioNome ? ` para ${movement.responsavelUsuarioNome}` : ''}`
     case 'MANUTENCAO':
       return `${movement.usuarioNome} enviou ${tool} para manutenção`
+    case 'CONCLUSAO_MANUTENCAO':
+      return `${movement.usuarioNome} concluiu a manutenção de ${tool}`
     case 'PERDA':
       return `Perda registrada para ${tool}`
     case 'CORRECAO':

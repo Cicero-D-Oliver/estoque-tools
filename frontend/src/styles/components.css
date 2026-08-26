@@ -112,7 +112,9 @@
   font-weight: 720;
 }
 
-.field input {
+.field input,
+.field select,
+.field textarea {
   width: 100%;
   min-height: 3rem;
   padding: 0.75rem 0.9rem;
@@ -124,20 +126,29 @@
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 
+.field textarea { min-height: 6rem; resize: vertical; line-height: 1.5; }
+.field select { appearance: auto; }
+
 .field input::placeholder {
   color: var(--slate-400);
 }
 
-.field input:hover {
+.field input:hover,
+.field select:hover,
+.field textarea:hover {
   border-color: var(--slate-400);
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
   border-color: var(--blue-600);
   box-shadow: 0 0 0 3px rgb(36 137 238 / 13%);
 }
 
-.field input[aria-invalid="true"] {
+.field input[aria-invalid="true"],
+.field select[aria-invalid="true"],
+.field textarea[aria-invalid="true"] {
   border-color: var(--danger-700);
 }
 
