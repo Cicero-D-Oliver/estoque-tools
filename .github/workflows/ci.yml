@@ -108,3 +108,38 @@ jobs:
             target/site/jacoco/
             target/pmd.xml
             target/cpd.xml
+
+  frontend:
+    name: Frontend React
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Exigir lockfile do frontend
+        run: test -f package-lock.json
+
+      - name: Configurar Node.js 24 e cache npm
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalação reproduzível
+        run: npm ci
+
+      - name: Testes automatizados
+        run: npm run test -- --reporter=json --outputFile=vitest-results.json
+
+      - name: Validar resultado dos testes
+        run: node scripts/verify-test-results.mjs vitest-results.json 18
+
+      - name: Build de produção
+        run: npm run build
