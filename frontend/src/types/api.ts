@@ -44,6 +44,18 @@ export interface Tool {
   ativo: boolean
 }
 
+export interface StockItem {
+  id: number
+  codigo: string
+  nome: string
+  categoria: string | null
+  quantidadeAtual: number
+  quantidadeMinima: number
+  localizacao: string | null
+  ativo: boolean
+  abaixoMinimo: boolean
+}
+
 export interface ToolMovement {
   id: number
   ferramentaId: number

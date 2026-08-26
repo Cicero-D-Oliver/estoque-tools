@@ -1,4 +1,4 @@
-import { ArrowRight, Building2, LogOut, Plus, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Building2, LogOut, Plus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Brand } from '../components/Brand'
@@ -64,10 +64,8 @@ export function OrganizationsPage() {
       </header>
 
       <section className="organization-page__content">
-        <div className="page-heading page-heading--center">
-          <span className="eyebrow">Seu ambiente de trabalho</span>
-          <h1>Escolha uma organização</h1>
-          <p>Cada ambiente mantém ferramentas, estoque e equipe isolados com segurança.</p>
+        <div className="page-heading page-heading--center organization-page__heading">
+          <h1 className="eyebrow organization-page__title">Seu ambiente de trabalho</h1>
         </div>
 
         {isLoading && <FeedbackState type="loading" title="Carregando organizações" message="Buscando seus vínculos ativos." />}
@@ -121,11 +119,9 @@ export function OrganizationsPage() {
             )}
           </>
         )}
-
-        <div className="organization-page__security"><ShieldCheck size={17} /> O backend valida seu vínculo em cada acesso.</div>
       </section>
 
-      <Dialog open={dialogOpen} title="Criar organização" onClose={() => setDialogOpen(false)}>
+      <Dialog open={dialogOpen} title="Novo ambiente" onClose={() => setDialogOpen(false)}>
         <form className="dialog-form" onSubmit={(event) => void handleCreate(event)}>
           {creationError && <div className="alert alert--error" role="alert">{creationError}</div>}
           <Field label="Nome da organização" name="organizationName" maxLength={120}
