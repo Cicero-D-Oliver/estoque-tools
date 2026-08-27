@@ -7,6 +7,7 @@ import { OrganizationsPage } from './pages/OrganizationsPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ToolsPage } from './pages/ToolsPage'
+import { InventoryPage } from './pages/InventoryPage'
 import { OrganizationRoute } from './routes/OrganizationRoute'
 import { ProtectedRoute } from './routes/ProtectedRoute'
 
@@ -23,7 +24,7 @@ export function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="ferramentas" element={<ToolsPage />} />
-            <Route path="estoque" element={<PlaceholderPage title="Estoque" />} />
+            <Route path="estoque" element={<InventoryPage />} />
             <Route path="movimentacoes" element={<PlaceholderPage title="Movimentações" />} />
             <Route path="equipe" element={<PlaceholderPage title="Equipe" />} />
           </Route>
