@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from '../App'
+import { formatOperationalDateTime } from '../lib/format'
 import { renderWithProviders } from '../test/render'
 import {
   accountFixture,
@@ -255,6 +256,40 @@ describe('tela operacional de Ferramentas', () => {
     expect(screen.queryByText('EMPRESTADA')).not.toBeInTheDocument()
     const listCall = operationalCall(fetchMock, '/api/ferramentas')
     expect((listCall?.[1]?.headers as Headers).get('X-Organization-Id')).toBe('12')
+  })
+
+  it('mantém as sete informações operacionais na tabela desktop', async () => {
+    await openTools()
+    const list = screen.getByRole('region', { name: 'Lista de ferramentas' })
+    const header = list.querySelector('.tools-list__header')
+    expect(header).not.toBeNull()
+    expect(header?.children).toHaveLength(7)
+    expect(header).toHaveTextContent('Ferramenta')
+    expect(header).toHaveTextContent('Patrimônio')
+    expect(header).toHaveTextContent('Situação')
+    expect(header).toHaveTextContent('Responsável')
+    expect(header).toHaveTextContent('Onde está')
+    expect(header).toHaveTextContent('Desde')
+    expect(header).toHaveTextContent('Ação')
+
+    const availableRow = screen.getByLabelText('Abrir detalhes de Furadeira Bosch')
+    const borrowedRow = screen.getByLabelText('Abrir detalhes de Esmerilhadeira Makita')
+    expect(availableRow.querySelector('.tool-row__location')).toHaveTextContent('No almoxarifado · Armário 2')
+    expect(borrowedRow.querySelector('.tool-row__location')).toHaveTextContent('Linha 3')
+  })
+
+  it('mostra horário local somente quando responsavelDesde é aplicável', async () => {
+    await openTools()
+    const availableRow = screen.getByLabelText('Abrir detalhes de Furadeira Bosch')
+    const borrowedRow = screen.getByLabelText('Abrir detalhes de Esmerilhadeira Makita')
+    const maintenanceRow = screen.getByLabelText('Abrir detalhes de Martelete')
+
+    expect(availableRow.querySelector('.tool-row__since')).toHaveTextContent('—')
+    expect(maintenanceRow.querySelector('.tool-row__location')).toHaveTextContent('—')
+    expect(maintenanceRow.querySelector('.tool-row__since')).toHaveTextContent('—')
+    expect(borrowedRow.querySelector('.tool-row__since')).toHaveTextContent(
+      formatOperationalDateTime('2026-08-26T11:43:00Z'),
+    )
   })
 
   it('busca imediatamente por nome, ignorando caixa', async () => {

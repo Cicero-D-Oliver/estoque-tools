@@ -347,11 +347,12 @@
   .tool-use-row { grid-template-columns: minmax(10rem, 1fr) minmax(9rem, 0.8fr); }
   .tool-use-row__context { grid-column: 1 / -1; }
   .tools-list__header,
-  .tool-row { grid-template-columns: minmax(10rem, 1.25fr) minmax(6rem, 0.65fr) minmax(6rem, 0.6fr) minmax(8rem, 0.85fr) minmax(7rem, 0.72fr); }
-  .tools-list__header > :nth-child(5),
-  .tool-row__location,
-  .tools-list__header > :nth-child(6),
-  .tool-row__since { display: none; }
+  .tool-row { grid-template-columns: minmax(7.5rem, 1.35fr) minmax(4.8rem, 0.68fr) minmax(5.2rem, 0.7fr) minmax(0, 1fr) minmax(0, 1.05fr) minmax(5.3rem, 0.75fr) minmax(6.4rem, 0.78fr); column-gap: 0.55rem; }
+  .tools-list__header,
+  .tool-row { padding-inline: 0.75rem; }
+  .tools-list__header { font-size: 0.61rem; }
+  .tool-row { font-size: 0.72rem; }
+  .tool-row__action .button { padding-inline: 0.55rem; font-size: 0.68rem; }
 }
 
 @media (max-width: 920px) {

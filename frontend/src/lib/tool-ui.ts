@@ -85,7 +85,7 @@ export function toolCurrentLocation(tool: Tool): string {
   if (!tool.ativo) return '—'
   if (tool.status === 'EMPRESTADA') return tool.destinoAtual || 'Destino não informado'
   if (tool.status === 'DISPONIVEL') {
-    return tool.localizacao ? `No almoxarifado · ${tool.localizacao}` : 'Local não informado'
+    return tool.localizacao ? `No almoxarifado · ${tool.localizacao}` : '—'
   }
   return '—'
 }

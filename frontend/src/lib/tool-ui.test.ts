@@ -107,8 +107,12 @@ describe('regras de apresentação de ferramentas', () => {
 
   it('apresenta guarda, destino e ausências de forma operacional', () => {
     expect(toolCurrentLocation(available)).toBe('No almoxarifado · Armário 2')
+    expect(toolCurrentLocation({ ...available, localizacao: null })).toBe('—')
     expect(toolCurrentLocation(borrowed)).toBe('Linha 3')
     expect(toolCurrentLocation({ ...borrowed, destinoAtual: null })).toBe('Destino não informado')
+    expect(toolCurrentLocation(maintenance)).toBe('—')
+    expect(toolCurrentLocation(lost)).toBe('—')
+    expect(toolCurrentLocation(inactive)).toBe('—')
   })
 
   it('limita transferência do operador à ferramenta sob sua responsabilidade', () => {
