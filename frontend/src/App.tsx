@@ -4,10 +4,12 @@ import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { OrganizationsPage } from './pages/OrganizationsPage'
-import { PlaceholderPage } from './pages/PlaceholderPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ToolsPage } from './pages/ToolsPage'
 import { InventoryPage } from './pages/InventoryPage'
+import { MovementsPage } from './pages/MovementsPage'
+import { TeamPage } from './pages/TeamPage'
+import { AdminOrganizationRoute } from './routes/AdminOrganizationRoute'
 import { OrganizationRoute } from './routes/OrganizationRoute'
 import { ProtectedRoute } from './routes/ProtectedRoute'
 
@@ -25,8 +27,10 @@ export function App() {
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="ferramentas" element={<ToolsPage />} />
             <Route path="estoque" element={<InventoryPage />} />
-            <Route path="movimentacoes" element={<PlaceholderPage title="Movimentações" />} />
-            <Route path="equipe" element={<PlaceholderPage title="Equipe" />} />
+            <Route path="movimentacoes" element={<MovementsPage />} />
+            <Route element={<AdminOrganizationRoute />}>
+              <Route path="equipe" element={<TeamPage />} />
+            </Route>
           </Route>
         </Route>
       </Route>

@@ -30,6 +30,20 @@ export interface Organization {
   status: MemberStatus
 }
 
+export interface OrganizationMember {
+  id: number
+  organizacaoId: number
+  usuarioId: number
+  usuarioNome: string
+  usuarioEmail: string
+  perfil: MemberProfile
+  status: MemberStatus
+  solicitadoEm: string
+  aprovadoEm: string | null
+  aprovadoPorUsuarioId: number | null
+  removidoEm: string | null
+}
+
 export interface Tool {
   id: number
   patrimonio: string

@@ -192,8 +192,10 @@ describe('fluxo organização e dashboard', () => {
     expect(screen.getByText('Ferramentas ativas').previousElementSibling).toHaveTextContent('4')
     expect(screen.getByText('Disponíveis').previousElementSibling).toHaveTextContent('1')
     expect(screen.getByText('Em uso').previousElementSibling).toHaveTextContent('1')
-    expect(screen.getByText('Aguardam conferência').previousElementSibling).toHaveTextContent('1')
-    expect(screen.getByText('1 movimentação aguarda conferência')).toBeInTheDocument()
+    const pendingSummary = document.querySelector('.dashboard-summary__item--attention')
+    expect(pendingSummary).toHaveTextContent('1')
+    expect(pendingSummary).toHaveTextContent('Aguardando confirmação do admin.')
+    expect(screen.getByText('1 movimentação aguardando confirmação do admin.')).toBeInTheDocument()
     expect(screen.getByText('1 ferramenta está em manutenção')).toBeInTheDocument()
     expect(screen.getByText('1 ferramenta está marcada como perdida')).toBeInTheDocument()
     expect(screen.getByText('1 item está abaixo do mínimo')).toBeInTheDocument()
@@ -247,8 +249,8 @@ describe('fluxo organização e dashboard', () => {
 
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/pendentes'))).toBe(false)
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/resumo'))).toBe(false)
-    expect(screen.queryByRole('heading', { name: 'Aguardando conferência' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Aguardam conferência')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Aguardando confirmação do admin.' })).not.toBeInTheDocument()
+    expect(document.querySelector('.dashboard-summary__item--attention')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Equipe' })).not.toBeInTheDocument()
   })
 
@@ -281,7 +283,7 @@ describe('fluxo organização e dashboard', () => {
     expect(within(personalSection!).getByText('Sob sua responsabilidade')).toBeInTheDocument()
     expect(within(personalSection!).getByText('Manutenção elétrica — Galpão 2')).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/pendentes'))).toBe(false)
-    expect(screen.queryByRole('heading', { name: 'Aguardando conferência' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Aguardando confirmação do admin.' })).not.toBeInTheDocument()
   })
 
   it('mostra responsável, destino e retirada nas ferramentas em uso, com as mais antigas primeiro', async () => {
@@ -354,7 +356,8 @@ describe('fluxo organização e dashboard', () => {
     expect(screen.getByText('Maria Oliveira retirou Martelete PAT-02')).toBeInTheDocument()
     expect(screen.getByText('Carlos transferiu Serra PAT-03 para Ana')).toBeInTheDocument()
     expect(screen.getByText('João devolveu Furadeira PAT-01')).toBeInTheDocument()
-    expect(screen.getAllByText('Pendente')).toHaveLength(1)
+    const records = screen.getByRole('heading', { name: 'Últimos registros' }).closest('section')
+    expect(within(records!).getByText('Aguardando confirmação do admin.')).toBeInTheDocument()
     expect(screen.queryByText('Confirmada')).not.toBeInTheDocument()
   })
 
@@ -364,7 +367,7 @@ describe('fluxo organização e dashboard', () => {
 
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/api/movimentacoes-ferramenta/pendentes'))).toBe(true)
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/resumo?aposId=0'))).toBe(false)
-    const pendingSection = screen.getByRole('heading', { name: 'Aguardando conferência' }).closest('section')
+    const pendingSection = screen.getByRole('heading', { name: 'Aguardando confirmação do admin.' }).closest('section')
     expect(pendingSection).not.toBeNull()
     expect(within(pendingSection!).getByText('Retirada')).toBeInTheDocument()
     expect(within(pendingSection!).getByText('Martelete · PAT-02')).toBeInTheDocument()
@@ -430,7 +433,7 @@ describe('fluxo organização e dashboard', () => {
       pendingMovements: [movementFixture, secondPending],
     }))
 
-    const indicator = screen.getByRole('status', { name: '2 pendências aguardam conferência' })
+    const indicator = screen.getByRole('status', { name: '2 pendências aguardando confirmação do admin.' })
     expect(indicator).toHaveTextContent('2')
     expect(indicator).toHaveTextContent('pendências')
   })
@@ -438,7 +441,7 @@ describe('fluxo organização e dashboard', () => {
   it('não exibe contador zero nem indicador administrativo sem dados reais', async () => {
     await openDashboard(operationalFetch([organizationFixture], { pendingMovements: [] }))
 
-    expect(screen.queryByLabelText(/pendência.*aguarda.*conferência/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/pendência.*aguardando.*confirmação do admin/i)).not.toBeInTheDocument()
     expect(document.querySelector('.dashboard-heading__pending')).not.toBeInTheDocument()
   })
 })

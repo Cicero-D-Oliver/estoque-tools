@@ -11,11 +11,11 @@ const labelByStatus: Record<string, string> = {
   CONFIRMADA: 'Confirmada',
 }
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, label }: { status: string; label?: string }) {
   return (
     <span className={`badge badge--${status.toLowerCase()}`}>
       <span aria-hidden="true" />
-      {labelByStatus[status] ?? status}
+      {label ?? labelByStatus[status] ?? status}
     </span>
   )
 }
