@@ -72,7 +72,7 @@ function MovementRow({
         className={`movement-review movement-review--${movement.reviewStatus?.toLowerCase() ?? 'not-applicable'}`}
         data-label="Conferência"
       >
-        {movement.reviewStatus === 'PENDENTE' ? 'Pendente' : movement.reviewStatus === 'CONFIRMADA' ? 'Confirmada' : '—'}
+        {movement.reviewStatus === 'PENDENTE' ? 'Aguardando confirmação do admin.' : movement.reviewStatus === 'CONFIRMADA' ? 'Confirmada' : '—'}
       </span>
       <div className="movement-row__actions" onClick={(event) => event.stopPropagation()}>
         {admin && pending
@@ -178,8 +178,8 @@ export function MovementsPage() {
       {admin && (
         <div className={`operations-pending-summary${pendingCount > 0 ? ' operations-pending-summary--attention' : ''}`} role="status">
           <span>{pendingCount > 0
-            ? `${pendingCount} ${pendingCount === 1 ? 'movimentação aguarda' : 'movimentações aguardam'} conferência.`
-            : 'Nada aguardando conferência.'}</span>
+            ? `${pendingCount} ${pendingCount === 1 ? 'movimentação aguardando' : 'movimentações aguardando'} confirmação do admin.`
+            : 'Sem novas movimentações'}</span>
           {pendingCount > 0 && <Button variant="ghost" onClick={() => setFilter('pending')}>Ver pendentes</Button>}
         </div>
       )}
@@ -221,7 +221,7 @@ export function MovementsPage() {
         <div className="operations-empty" role="status"><p>Nenhuma movimentação registrada.</p></div>
       ) : visibleMovements.length === 0 ? (
         <div className="operations-empty" role="status">
-          <p>{hasSearch ? `Nenhum resultado para “${search.trim()}”.` : filter === 'pending' ? 'Nada aguardando conferência.' : 'Nenhuma movimentação neste filtro.'}</p>
+          <p>{hasSearch ? `Nenhum resultado para “${search.trim()}”.` : filter === 'pending' ? 'Sem novas movimentações' : 'Nenhuma movimentação neste filtro.'}</p>
           <Button variant="ghost" onClick={() => hasSearch ? setSearch('') : setFilter('all')}>{hasSearch ? 'Limpar busca' : 'Limpar filtros'}</Button>
         </div>
       ) : (

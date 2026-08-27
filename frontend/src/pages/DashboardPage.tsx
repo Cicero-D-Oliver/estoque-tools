@@ -128,7 +128,7 @@ export function DashboardPage() {
   const attentionItems = [
     ...(isAdmin && pendingMovements.length > 0 ? [{
       tone: 'pending',
-      text: `${countMessage(pendingMovements.length, 'movimentação aguarda', 'movimentações aguardam')} conferência`,
+      text: `${countMessage(pendingMovements.length, 'movimentação aguardando', 'movimentações aguardando')} confirmação do admin.`,
     }] : []),
     ...(lost > 0 ? [{
       tone: 'danger',
@@ -155,7 +155,7 @@ export function DashboardPage() {
           <div
             className="dashboard-heading__pending"
             role="status"
-            aria-label={`${countMessage(pendingMovements.length, 'pendência aguarda', 'pendências aguardam')} conferência`}
+            aria-label={`${countMessage(pendingMovements.length, 'pendência aguardando', 'pendências aguardando')} confirmação do admin.`}
           >
             <Bell size={18} aria-hidden="true" />
             <strong>{pendingMovements.length}</strong>
@@ -170,7 +170,7 @@ export function DashboardPage() {
         <div className="dashboard-summary__item"><strong>{borrowedTools.length}</strong><span>Em uso</span></div>
         {isAdmin && (
           <div className="dashboard-summary__item dashboard-summary__item--attention">
-            <strong>{pendingMovements.length}</strong><span>Aguardam conferência</span>
+            <strong>{pendingMovements.length}</strong><span>Aguardando confirmação do admin.</span>
           </div>
         )}
       </section>
@@ -218,7 +218,7 @@ export function DashboardPage() {
         {isAdmin && (
           <section className="operational-section pending-review" aria-labelledby="pending-review-heading">
             <header className="operational-section__header">
-              <h2 id="pending-review-heading">Aguardando conferência</h2>
+              <h2 id="pending-review-heading">Aguardando confirmação do admin.</h2>
               <span className="section-count section-count--attention">{pendingMovements.length}</span>
             </header>
             {pendingMovements.length === 0 ? (
@@ -263,7 +263,7 @@ export function DashboardPage() {
                   </span>
                 </div>
                 <time dateTime={movement.dataHora}>{formatDateTime(movement.dataHora)}</time>
-                {movement.statusRevisao === 'PENDENTE' && <StatusBadge status="PENDENTE" />}
+                {movement.statusRevisao === 'PENDENTE' && <StatusBadge status="PENDENTE" label="Aguardando confirmação do admin." />}
               </article>
             ))}
           </div>

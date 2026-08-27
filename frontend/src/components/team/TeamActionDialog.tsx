@@ -39,12 +39,13 @@ export function TeamActionDialog({
   return (
     <Dialog open title={titles[action]} onClose={onClose}>
       <div className="dialog-form">
-        {member && (
+        {member && action === 'remove' && (
           <p className="team-action-person">
             <strong>{member.usuarioNome}</strong>
             <span>{member.usuarioEmail}</span>
           </p>
         )}
+        {member && action !== 'remove' && <p className="team-action-person"><span>{member.usuarioEmail}</span></p>}
         {action === 'remove' ? (
           <p className="team-action-copy">Esta pessoa perderá o acesso a este ambiente. A conta não será excluída.</p>
         ) : (
@@ -57,9 +58,6 @@ export function TeamActionDialog({
             </select>
           </label>
         )}
-        {action === 'profile' && profile === 'ADMIN' && (
-          <p className="team-action-warning">Este perfil poderá administrar os acessos deste ambiente.</p>
-        )}
         {error && <p className="form-alert" role="alert">{error}</p>}
         <div className="dialog-form__actions">
           <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>Cancelar</Button>
@@ -69,7 +67,7 @@ export function TeamActionDialog({
             onClick={() => onSubmit(action === 'remove' ? undefined : profile)}
             loading={pending}
           >
-            {action === 'approve' ? 'Aprovar acesso' : action === 'profile' ? 'Salvar perfil' : 'Remover acesso'}
+            {action === 'approve' ? 'Aprovar' : action === 'profile' ? 'Salvar' : 'Remover acesso'}
           </Button>
         </div>
       </div>

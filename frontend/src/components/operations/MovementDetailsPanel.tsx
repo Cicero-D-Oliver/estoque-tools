@@ -39,7 +39,7 @@ export function MovementDetailsPanel({
             <dt>Destino</dt><dd>{movement.destination || '—'}</dd>
             <dt>Observação</dt><dd>{movement.observation || '—'}</dd>
             {movement.reviewStatus && (
-              <><dt>Conferência</dt><dd>{movement.reviewStatus === 'PENDENTE' ? 'Pendente' : 'Confirmada'}</dd></>
+              <><dt>Conferência</dt><dd>{movement.reviewStatus === 'PENDENTE' ? 'Aguardando confirmação do admin.' : 'Confirmada'}</dd></>
             )}
             {movement.confirmedBy && <><dt>Confirmada por</dt><dd>{movement.confirmedBy}</dd></>}
             {movement.confirmedAt && <><dt>Confirmada em</dt><dd>{formatDateTime(movement.confirmedAt)}</dd></>}
