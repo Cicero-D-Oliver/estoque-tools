@@ -34,13 +34,13 @@ export interface Tool {
   id: number
   patrimonio: string
   nome: string
-  categoria: string
+  categoria: string | null
   status: ToolStatus
   responsavelAtualId: number | null
   responsavelAtualNome: string | null
   responsavelDesde: string | null
   destinoAtual: string | null
-  localizacao: string
+  localizacao: string | null
   ativo: boolean
 }
 
@@ -72,6 +72,7 @@ export interface ToolMovement {
     | 'DEVOLUCAO'
     | 'TRANSFERENCIA'
     | 'MANUTENCAO'
+    | 'CONCLUSAO_MANUTENCAO'
     | 'PERDA'
     | 'CORRECAO'
   dataHora: string
@@ -81,6 +82,11 @@ export interface ToolMovement {
   confirmadoPorUsuarioId: number | null
   confirmadoPorUsuarioNome: string | null
   confirmadoEm: string | null
+}
+
+export interface TransferResponsible {
+  id: number
+  nome: string
 }
 
 export interface ToolMovementSummary {
