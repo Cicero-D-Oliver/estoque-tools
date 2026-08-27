@@ -56,6 +56,20 @@ export interface StockItem {
   abaixoMinimo: boolean
 }
 
+export type StockMovementType = 'ENTRADA' | 'SAIDA' | 'CORRECAO'
+
+export interface StockMovement {
+  id: number
+  itemEstoqueId: number
+  itemEstoqueNome: string
+  usuarioId: number
+  usuarioNome: string
+  tipoMovimentacao: StockMovementType
+  quantidade: number
+  dataHora: string
+  observacao: string | null
+}
+
 export interface ToolMovement {
   id: number
   ferramentaId: number
