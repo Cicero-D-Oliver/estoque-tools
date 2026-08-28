@@ -14,7 +14,7 @@ No PowerShell desta máquina, use `npm.cmd` porque a execução de `npm.ps1` per
 
 ```powershell
 Copy-Item .env.example .env
-npm.cmd install
+npm.cmd ci
 npm.cmd run dev
 ```
 
@@ -30,6 +30,14 @@ npm.cmd run build
 
 ## Segurança da sessão
 
-Tokens de acesso e renovação permanecem apenas em memória. Atualizar a página encerra a sessão de propósito; não foi introduzido armazenamento persistente acessível ao JavaScript. A evolução segura é o backend entregar o refresh token em cookie HttpOnly/Secure/SameSite.
+O access token permanece somente em memória. O refresh token é transportado em
+cookie `HttpOnly`, não fica acessível ao JavaScript e permite restaurar a sessão
+após recarregar a página. As chamadas enviam credenciais ao backend, que faz
+rotação, detecção de reutilização e revogação da sessão. Nenhum JWT é gravado em
+`localStorage` ou `sessionStorage`.
+
+Em produção, o cookie deve usar `Secure`, HTTPS e `SameSite` compatível com a
+topologia escolhida. As origens CORS precisam ser explícitas e coincidir com o
+frontend publicado.
 
 O `X-Organization-Id` seleciona a organização corrente nas chamadas de domínio. Ele não representa autorização: membership, perfil e isolamento continuam sendo validados no Spring Boot.

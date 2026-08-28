@@ -9,7 +9,7 @@ it('redireciona uma rota protegida para login sem sessão', () => {
   render(
     <MemoryRouter initialEntries={['/restrita']}>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
+        <AuthProvider restoreOnMount={false}>
           <Routes>
             <Route element={<ProtectedRoute />}>
               <Route path="/restrita" element={<h1>Área restrita</h1>} />

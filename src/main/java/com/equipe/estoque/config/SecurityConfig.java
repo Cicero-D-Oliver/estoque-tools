@@ -3,6 +3,7 @@ package com.equipe.estoque.config;
 import com.equipe.estoque.repository.UsuarioRepository;
 import com.equipe.estoque.security.ActiveAccountTokenValidator;
 import com.equipe.estoque.security.ApiSecurityErrorHandler;
+import com.equipe.estoque.security.RefreshCookieCsrfFilter;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +29,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -39,7 +41,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            ApiSecurityErrorHandler securityErrorHandler
+            ApiSecurityErrorHandler securityErrorHandler,
+            CorsProperties corsProperties
     ) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -68,7 +71,11 @@ public class SecurityConfig {
                         .accessDeniedHandler(securityErrorHandler))
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(Customizer.withDefaults())
-                        .authenticationEntryPoint(securityErrorHandler));
+                        .authenticationEntryPoint(securityErrorHandler))
+                .addFilterBefore(
+                        new RefreshCookieCsrfFilter(corsProperties, securityErrorHandler),
+                        BearerTokenAuthenticationFilter.class
+                );
         return http.build();
     }
 

@@ -50,7 +50,7 @@ jobs:
             "com.equipe.estoque.ToolWithdrawalConcurrencyIntegrationTest",
             "com.equipe.estoque.config.SQLiteLegacyBaselineCallbackTest"
           )
-          $minimumTests = 110
+          $minimumTests = 112
           $total = 0
           $executedSuites = @()
           foreach ($report in $reports) {
@@ -140,7 +140,7 @@ jobs:
         run: npm run test -- --reporter=json --outputFile=vitest-results.json
 
       - name: Validar resultado dos testes
-        run: node scripts/verify-test-results.mjs vitest-results.json 167
+        run: node scripts/verify-test-results.mjs vitest-results.json 172
 
       - name: Build de produção
         run: npm run build

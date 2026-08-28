@@ -1,9 +1,12 @@
 # API de Estoque e Ferramentas
 
-Backend REST para controlar usuários internos, itens consumíveis, ferramentas patrimoniais e seus históricos de movimentação. O projeto inicia localmente com SQLite e também oferece um ambiente Docker completo com PostgreSQL.
+Aplicação web para controlar usuários internos, itens consumíveis, ferramentas
+patrimoniais e seus históricos de movimentação. O backend Spring Boot inicia
+localmente com SQLite e oferece PostgreSQL para produção; o frontend usa React,
+TypeScript e Vite.
 
-> Esta versão implementa autenticação JWT, sessões renováveis e autorização por
-> membership ativa na organização. A interface gráfica permanece fora do escopo.
+> Esta versão implementa autenticação JWT, sessão persistente por refresh cookie
+> e autorização por membership ativa na organização.
 
 ## Funcionalidades
 
@@ -18,7 +21,8 @@ Backend REST para controlar usuários internos, itens consumíveis, ferramentas 
 - Swagger UI, OpenAPI 3.1 e healthcheck operacional.
 - Perfis separados para SQLite e PostgreSQL.
 - Schema versionado por Flyway e validado pelo Hibernate.
-- JWT curto, refresh token rotativo, revogação de sessões e proteção contra força bruta.
+- JWT curto em memória, refresh cookie HttpOnly rotativo, revogação de sessões e proteção contra força bruta.
+- Interface React responsiva para os fluxos operacionais do MVP.
 
 ## Arquitetura
 
@@ -56,6 +60,8 @@ flowchart LR
 | Flyway | 11.7.2, gerenciado pelo Spring Boot |
 | JaCoCo | 0.8.12 |
 | Maven | 3.9 ou superior |
+| React / TypeScript / Vite | 19 / 7.0 / 8.2 |
+| Node.js / npm | 24 / 11 |
 
 ## Requisitos
 
@@ -63,6 +69,7 @@ Para execução local:
 
 - JDK 17;
 - Maven 3.9+;
+- Node.js 24 e npm 11 para desenvolver ou gerar o frontend;
 - porta 8080 livre, ou `SERVER_PORT` com outra porta.
 
 Para execução em contêineres:
@@ -205,6 +212,8 @@ O banco fica no volume `estoque_postgres_data`. `docker compose down -v` também
 | `APP_JWT_SECRET` | sem padrão | chave Base64 aleatória de, no mínimo, 32 bytes |
 | `APP_ACCESS_TOKEN_TTL` | `15m` | duração do JWT de acesso |
 | `APP_REFRESH_TOKEN_TTL` | `30d` | duração máxima do refresh token |
+| `APP_REFRESH_COOKIE_SECURE` | `false` (`true` em `prod`) | envia o refresh cookie somente por HTTPS |
+| `APP_REFRESH_COOKIE_SAME_SITE` | `Lax` | política `Strict`, `Lax` ou `None` do cookie |
 | `APP_PASSWORD_RESET_TOKEN_TTL` | `30m` | validade da recuperação interna |
 | `APP_MAX_FAILED_LOGIN_ATTEMPTS` | `5` | falhas consecutivas antes do bloqueio |
 | `APP_LOGIN_LOCK_DURATION` | `15m` | duração do bloqueio temporário |
@@ -212,7 +221,7 @@ O banco fica no volume `estoque_postgres_data`. `docker compose down -v` também
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | origens web permitidas, separadas por vírgula |
 | `CORS_ALLOWED_METHODS` | `GET,POST,PUT,DELETE,OPTIONS` | métodos CORS |
 | `CORS_ALLOWED_HEADERS` | `Content-Type,Accept,Authorization,X-Correlation-Id,X-Organization-Id` | cabeçalhos CORS |
-| `CORS_ALLOW_CREDENTIALS` | `false` | envio de credenciais pelo navegador |
+| `CORS_ALLOW_CREDENTIALS` | `true` | envio do refresh cookie pelo navegador |
 | `CORS_MAX_AGE` | `3600` | cache do preflight em segundos |
 | `LOG_LEVEL_ROOT` | `INFO` | nível global de logs |
 | `LOG_LEVEL_APP` | `INFO` | nível do código da aplicação |
@@ -260,8 +269,9 @@ chmod +x scripts/linux-macos/*.sh
 mvn clean verify
 ```
 
-A suíte contém atualmente 102 testes. Eles atravessam HTTP, validação, services,
-repositories, segurança, SQLite e PostgreSQL 17 via Testcontainers, além de
+A suíte backend contém atualmente 112 testes; a suíte frontend possui
+172 testes. Elas atravessam HTTP, validação, services, repositories, segurança,
+SQLite e PostgreSQL 17 via Testcontainers, além de
 exercitar migrações Flyway, assinatura integral do baseline, sessões rotativas,
 revogação, força bruta, isolamento entre organizações, fluxo operacional de
 ferramentas e disputas concorrentes de retirada nos dois bancos.
@@ -290,12 +300,14 @@ Use `-KeepArtifacts` somente para diagnóstico local; o comportamento padrão é
 ### Integração contínua
 
 A pipeline `.github/workflows/ci.yml` usa Java 17 e cache Maven. Em pushes e
-pull requests ela executa `mvn clean verify`, exige no mínimo os 102 testes do
-baseline atual e confirma a execução das doze classes de teste esperadas. O
+pull requests ela executa `mvn clean verify`, exige no mínimo os 112 testes do
+baseline atual e confirma a execução das treze classes de teste esperadas. O
 workflow rejeita falhas, erros, testes ignorados ou relatórios Surefire
 ausentes, mas permite que novos testes aumentem o total sem exigir manutenção
 da contagem. JaCoCo, PMD, CPD e o smoke test SQLite isolado continuam
-obrigatórios. Não há publicação, deploy ou secrets de produção.
+obrigatórios. Um job separado usa Node.js 24, `npm ci`, exige no mínimo 172
+testes React e gera o build de produção. Não há publicação, deploy ou secrets
+de produção.
 
 ## Contrato HTTP e erros
 
@@ -362,6 +374,10 @@ O cabeçalho `X-Correlation-Id` é devolvido na resposta e aparece nos logs. Val
 │   ├── db/migration/postgresql
 │   └── db/seed/sqlite
 ├── src/test
+├── frontend
+│   ├── src
+│   ├── public
+│   └── docs
 ├── scripts/windows
 ├── scripts/linux-macos
 ├── Dockerfile
@@ -371,7 +387,8 @@ O cabeçalho `X-Correlation-Id` é devolvido na resposta e aparece nos logs. Val
 
 ## Screenshots
 
-Não há screenshots no repositório. Esta entrega contém somente o backend e a interface técnica Swagger UI; uma interface gráfica de usuário ainda não existe.
+Não há screenshots versionados no repositório. A interface React cobre os fluxos
+do MVP, mas imagens estáveis ainda precisam ser selecionadas e adicionadas.
 
 ## Segurança e limites atuais
 
@@ -379,8 +396,8 @@ Não há screenshots no repositório. Esta entrega contém somente o backend e a
 - CORS é restritivo e configurável.
 - Stacktraces, causas e mensagens técnicas não são devolvidos ao cliente.
 - Logs não registram payload, e-mail, senha ou stacktrace; usam IDs e referência.
-- Access JWT curto e refresh token rotativo protegem sessões; somente hashes dos
-  tokens opacos são persistidos.
+- Access JWT curto permanece em memória; o refresh token rotativo usa cookie
+  HttpOnly e somente seu hash é persistido.
 - Troca de senha e logout global revogam sessões anteriores.
 - Swagger fica desabilitado no profile de produção.
 
@@ -392,8 +409,26 @@ rotação de `APP_JWT_SECRET` e o limite atual da recuperação de senha.
 1. Integrar um provedor confiável para entrega de tokens de recuperação de senha.
 2. Paginar listagens e históricos potencialmente grandes.
 3. Tornar os dados de auditoria independentes de alterações cadastrais posteriores.
-4. Criar frontend e screenshots dos fluxos de usuário.
+4. Adicionar screenshots estáveis dos fluxos de usuário.
 5. Adicionar métricas, tracing e alertas; avaliar cache somente após medir a carga.
+
+## PRODUCTION DEPLOYMENT REQUIREMENTS
+
+- Java 17 para executar o backend e Node.js 24 para gerar o build estático do frontend;
+- PostgreSQL disponível e protegido; SQLite é restrito ao desenvolvimento e aos testes;
+- HTTPS obrigatório, normalmente terminado por um reverse proxy;
+- secrets externos para `APP_JWT_SECRET`, usuário e senha do banco;
+- origem pública do frontend na allowlist CORS, com credenciais habilitadas;
+- refresh cookie com `Secure=true`, `HttpOnly`, `Path=/api/auth` e `SameSite` adequado à topologia;
+- Flyway V1–V8 aplicado no startup e Hibernate com `ddl-auto=validate`;
+- healthcheck em `/actuator/health`, usado pelo orquestrador sem expor detalhes internos;
+- backups periódicos e restauração do PostgreSQL testada;
+- coleta de logs, monitoramento de disponibilidade e alertas operacionais.
+
+O profile `prod` falha no startup se o cookie não for seguro, se CORS não aceitar
+credenciais ou se uma origem local for configurada. O provedor de hospedagem,
+DNS, certificados, reverse proxy e serviço gerenciado de PostgreSQL ainda devem
+ser escolhidos antes do deploy real.
 
 ## Relatórios e roteiro
 

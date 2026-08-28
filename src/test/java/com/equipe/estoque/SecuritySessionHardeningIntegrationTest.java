@@ -9,6 +9,7 @@ import com.equipe.estoque.repository.RefreshTokenRepository;
 import com.equipe.estoque.repository.TokenRecuperacaoSenhaRepository;
 import com.equipe.estoque.repository.UsuarioRepository;
 import com.equipe.estoque.security.OpaqueTokenService;
+import com.equipe.estoque.security.RefreshCookieService;
 import com.equipe.estoque.service.PasswordRecoveryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
@@ -16,9 +17,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.web.servlet.MvcResult;
+
+import jakarta.servlet.http.Cookie;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -37,6 +42,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -80,13 +86,38 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
     }
 
     @Test
+    void loginDeveEntregarRefreshSomenteEmCookieHttpOnlyRestrito() throws Exception {
+        register("Cookie Seguro", "cookie-seguro@example.com");
+
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "email", "cookie-seguro@example.com",
+                                "senha", PASSWORD
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString())
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andExpect(jsonPath("$.refreshExpiresAt").doesNotExist())
+                .andReturn();
+
+        String setCookie = result.getResponse().getHeader(HttpHeaders.SET_COOKIE);
+        assertNotNull(setCookie);
+        assertTrue(setCookie.contains(RefreshCookieService.COOKIE_NAME + "="));
+        assertTrue(setCookie.contains("HttpOnly"));
+        assertTrue(setCookie.contains("SameSite=Lax"));
+        assertTrue(setCookie.contains("Path=/api/auth"));
+        assertFalse(setCookie.contains("Secure"));
+    }
+
+    @Test
     void refreshValidoDeveRotacionarTokenEEmitirNovoAccessToken() throws Exception {
         Session session = registerAndLogin("Rotação", "rotacao@example.com");
-        JsonNode rotated = refresh(session.refreshToken(), 200);
+        TokenPair rotated = refreshSession(session.refreshToken());
 
-        String replacement = rotated.get("refreshToken").asText();
+        String replacement = rotated.refreshToken();
         assertNotEquals(session.refreshToken(), replacement);
-        assertNotEquals(session.token(), rotated.get("accessToken").asText());
+        assertNotEquals(session.token(), rotated.accessToken());
         List<RefreshToken> stored = refreshTokenRepository.findAllByUsuarioIdOrderById(session.accountId());
         assertEquals(2, stored.size());
         assertEquals(MotivoRevogacaoRefresh.ROTACIONADO, stored.get(0).getMotivoRevogacao());
@@ -94,7 +125,7 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
         assertNull(stored.get(1).getRevogadoEm());
 
         mockMvc.perform(get("/api/auth/me")
-                        .header(AUTHORIZATION, "Bearer " + rotated.get("accessToken").asText()))
+                        .header(AUTHORIZATION, "Bearer " + rotated.accessToken()))
                 .andExpect(status().isOk());
     }
 
@@ -124,8 +155,8 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
     @Test
     void reutilizacaoDeTokenRotacionadoDeveRevogarTodaAFamilia() throws Exception {
         Session session = registerAndLogin("Reuse", "reuse@example.com");
-        JsonNode rotated = refresh(session.refreshToken(), 200);
-        String replacement = rotated.get("refreshToken").asText();
+        TokenPair rotated = refreshSession(session.refreshToken());
+        String replacement = rotated.refreshToken();
 
         refresh(session.refreshToken(), 401);
         refresh(replacement, 401);
@@ -142,9 +173,10 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
 
         mockMvc.perform(post("/api/auth/logout")
                         .header(AUTHORIZATION, bearer(session))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("refreshToken", session.refreshToken()))))
+                        .cookie(refreshCookie(session.refreshToken())))
                 .andExpect(status().isNoContent())
+                .andExpect(header().string(HttpHeaders.SET_COOKIE,
+                        org.hamcrest.Matchers.containsString("Max-Age=0")))
                 .andExpect(content().string(""));
         logout(session, session.refreshToken());
     }
@@ -167,7 +199,9 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
 
         mockMvc.perform(post("/api/auth/logout-all")
                         .header(AUTHORIZATION, "Bearer " + first.accessToken()))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isNoContent())
+                .andExpect(header().string(HttpHeaders.SET_COOKIE,
+                        org.hamcrest.Matchers.containsString("Max-Age=0")));
 
         refresh(first.refreshToken(), 401);
         refresh(second.refreshToken(), 401);
@@ -181,7 +215,7 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
         Session session = registerAndLogin("Troca Senha", "troca-senha@example.com");
         String oldHash = usuarioRepository.findById(session.accountId()).orElseThrow().getSenhaHash();
 
-        changePassword(session, PASSWORD, NEW_PASSWORD, 204);
+        changePassword(session, PASSWORD, NEW_PASSWORD, 204, true);
 
         Usuario account = usuarioRepository.findById(session.accountId()).orElseThrow();
         assertNotEquals(oldHash, account.getSenhaHash());
@@ -198,7 +232,7 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
     void trocaDeSenhaComSenhaAtualErradaNaoDeveRevogarSessao() throws Exception {
         Session session = registerAndLogin("Senha Atual", "senha-atual@example.com");
 
-        changePassword(session, "SenhaAtualErrada!2026", NEW_PASSWORD, 400);
+        changePassword(session, "SenhaAtualErrada!2026", NEW_PASSWORD, 400, false);
 
         refresh(session.refreshToken(), 200);
         assertTrue(passwordEncoder.matches(
@@ -211,8 +245,8 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
     void trocaDeSenhaDeveAplicarPoliticaEDiferencaDaSenhaAtual() throws Exception {
         Session session = registerAndLogin("Política", "politica-senha@example.com");
 
-        changePassword(session, PASSWORD, "curta", 400);
-        changePassword(session, PASSWORD, PASSWORD, 400);
+        changePassword(session, PASSWORD, "curta", 400, false);
+        changePassword(session, PASSWORD, PASSWORD, 400, false);
         assertTrue(passwordEncoder.matches(
                 PASSWORD,
                 usuarioRepository.findById(session.accountId()).orElseThrow().getSenhaHash()
@@ -347,19 +381,34 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
     }
 
     private JsonNode refresh(String refreshToken, int expectedStatus) throws Exception {
-        String response = mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("refreshToken", refreshToken))))
-                .andExpect(status().is(expectedStatus))
-                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        var action = mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(refreshCookie(refreshToken)))
+                .andExpect(status().is(expectedStatus));
+        if (expectedStatus == 401) {
+            action.andExpect(header().string(HttpHeaders.SET_COOKIE,
+                    org.hamcrest.Matchers.containsString("Max-Age=0")));
+        }
+        MvcResult result = action.andReturn();
+        String response = result.getResponse().getContentAsString(StandardCharsets.UTF_8);
         return response.isBlank() ? objectMapper.createObjectNode() : objectMapper.readTree(response);
+    }
+
+    private TokenPair refreshSession(String refreshToken) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(refreshCookie(refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andReturn();
+        JsonNode body = objectMapper.readTree(
+                result.getResponse().getContentAsString(StandardCharsets.UTF_8)
+        );
+        return new TokenPair(body.get("accessToken").asText(), refreshCookie(result));
     }
 
     private void logout(Session session, String refreshToken) throws Exception {
         mockMvc.perform(post("/api/auth/logout")
                         .header(AUTHORIZATION, bearer(session))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("refreshToken", refreshToken))))
+                        .cookie(refreshCookie(refreshToken)))
                 .andExpect(status().isNoContent());
     }
 
@@ -367,9 +416,10 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
             Session session,
             String currentPassword,
             String newPassword,
-            int expectedStatus
+            int expectedStatus,
+            boolean expectExpiredCookie
     ) throws Exception {
-        mockMvc.perform(put("/api/auth/password")
+        var result = mockMvc.perform(put("/api/auth/password")
                         .header(AUTHORIZATION, bearer(session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of(
@@ -377,6 +427,10 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
                                 "novaSenha", newPassword
                         ))))
                 .andExpect(status().is(expectedStatus));
+        if (expectExpiredCookie) {
+            result.andExpect(header().string(HttpHeaders.SET_COOKIE,
+                    org.hamcrest.Matchers.containsString("Max-Age=0")));
+        }
     }
 
     private JsonNode invalidLogin(String email, String password) throws Exception {
@@ -386,5 +440,9 @@ class SecuritySessionHardeningIntegrationTest extends SecurityTestSupport {
                 .andExpect(status().isUnauthorized())
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         return objectMapper.readTree(response);
+    }
+
+    private Cookie refreshCookie(String value) {
+        return new Cookie(RefreshCookieService.COOKIE_NAME, value);
     }
 }

@@ -7,13 +7,19 @@ Este documento registra somente os contratos efetivamente inspecionados no backe
 | Operação | Método e rota | Corpo/resposta relevante |
 |---|---|---|
 | Cadastro | `POST /api/auth/register` | Envia `{ nome, email, senha }`; retorna a conta criada. |
-| Login | `POST /api/auth/login` | Envia `{ email, senha }`; retorna `accessToken`, expiração, `refreshToken` rotativo e sua expiração. |
+| Login | `POST /api/auth/login` | Envia `{ email, senha }`; retorna `accessToken` e expiração. O refresh rotativo é definido em cookie `HttpOnly`. |
 | Conta atual | `GET /api/auth/me` | Retorna `{ id, nome, email, ativo, senhaAlteradaEm, ultimoLoginEm }`. |
-| Renovação | `POST /api/auth/refresh` | Envia `{ refreshToken }`; retorna um novo par rotativo. |
-| Logout | `POST /api/auth/logout` | Bearer obrigatório; envia `{ refreshToken }`; retorna `204`. |
+| Renovação | `POST /api/auth/refresh` | Não possui corpo; consome e rotaciona o cookie de refresh, retornando novo access token. |
+| Logout | `POST /api/auth/logout` | Bearer obrigatório; revoga a sessão do cookie, expira o cookie e retorna `204`. |
 | Logout global | `POST /api/auth/logout-all` | Bearer obrigatório; retorna `204`. |
 
-O access token e o refresh token são mantidos **somente em memória**. Eles não são gravados em `localStorage`, `sessionStorage`, banco do navegador ou logs. Como o backend entrega o refresh token ao JavaScript, a evolução recomendada é usar cookie `HttpOnly`, `Secure` e `SameSite`; até lá, recarregar a página exige novo login.
+O access token fica **somente em memória**. O refresh token nunca é entregue ao
+JavaScript: o navegador o mantém em cookie `HttpOnly`, com `Secure` obrigatório
+no profile de produção, `SameSite` configurável e `Path=/api/auth`. Login,
+refresh e logout exigem origem permitida; o frontend usa `credentials: include`.
+Nenhum token é gravado em `localStorage`, `sessionStorage` ou logs. Ao recarregar
+a aplicação, uma única renovação restaura a sessão quando o cookie ainda é
+válido.
 
 ## Organizações
 

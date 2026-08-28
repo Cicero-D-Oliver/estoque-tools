@@ -2,9 +2,11 @@ package com.equipe.estoque;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.equipe.estoque.security.RefreshCookieService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -50,15 +52,14 @@ abstract class SecurityTestSupport {
     }
 
     protected TokenPair loginTokens(String email, String password) throws Exception {
-        String response = mockMvc.perform(post("/api/auth/login")
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("email", email, "senha", password))))
                 .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString(StandardCharsets.UTF_8);
+                .andReturn();
+        String response = result.getResponse().getContentAsString(StandardCharsets.UTF_8);
         JsonNode body = objectMapper.readTree(response);
-        return new TokenPair(body.get("accessToken").asText(), body.get("refreshToken").asText());
+        return new TokenPair(body.get("accessToken").asText(), refreshCookie(result));
     }
 
     protected long createOrganization(Session session, String name) throws Exception {
@@ -94,6 +95,14 @@ abstract class SecurityTestSupport {
     protected long id(String response) throws Exception {
         JsonNode json = objectMapper.readTree(response);
         return json.get("id").asLong();
+    }
+
+    protected String refreshCookie(MvcResult result) {
+        var cookie = result.getResponse().getCookie(RefreshCookieService.COOKIE_NAME);
+        if (cookie == null) {
+            throw new IllegalStateException("Cookie de refresh ausente na resposta de teste");
+        }
+        return cookie.getValue();
     }
 
     protected record TokenPair(String accessToken, String refreshToken) {

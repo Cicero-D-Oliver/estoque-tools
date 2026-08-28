@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
 import { Button } from '../components/Button'
@@ -20,6 +20,12 @@ export function LoginPage() {
   const [senha, setSenha] = useState('')
   const [errors, setErrors] = useState<LoginFormErrors>({})
   const [submitError, setSubmitError] = useState('')
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      navigate('/organizacoes', { replace: true })
+    }
+  }, [navigate, status])
 
   function validate() {
     const nextErrors: LoginFormErrors = {}
