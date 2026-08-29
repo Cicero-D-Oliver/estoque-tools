@@ -1,6 +1,8 @@
 export type MemberProfile = 'ADMIN' | 'OPERADOR' | 'CONSULTA';
 export type MemberStatus = 'PENDENTE' | 'ATIVO' | 'REJEITADO' | 'REMOVIDO';
 export type ToolStatus = 'DISPONIVEL' | 'EMPRESTADA' | 'MANUTENCAO' | 'PERDIDA';
+export type ReviewStatus = 'PENDENTE' | 'CONFIRMADA';
+export type StockMovementType = 'ENTRADA' | 'SAIDA' | 'CORRECAO';
 export type ToolMovementType =
   | 'RETIRADA'
   | 'DEVOLUCAO'
@@ -37,6 +39,20 @@ export interface Organization {
   status: MemberStatus;
 }
 
+export interface OrganizationMember {
+  id: number;
+  organizacaoId: number;
+  usuarioId: number;
+  usuarioNome: string;
+  usuarioEmail: string;
+  perfil: MemberProfile;
+  status: MemberStatus;
+  solicitadoEm: string;
+  aprovadoEm: string | null;
+  aprovadoPorUsuarioId: number | null;
+  removidoEm: string | null;
+}
+
 export interface Tool {
   id: number;
   patrimonio: string;
@@ -63,6 +79,18 @@ export interface StockItem {
   abaixoMinimo: boolean;
 }
 
+export interface StockMovement {
+  id: number;
+  itemEstoqueId: number;
+  itemEstoqueNome: string;
+  usuarioId: number;
+  usuarioNome: string;
+  tipoMovimentacao: StockMovementType;
+  quantidade: number;
+  dataHora: string;
+  observacao: string | null;
+}
+
 export interface ToolMovement {
   id: number;
   ferramentaId: number;
@@ -78,7 +106,7 @@ export interface ToolMovement {
   dataHora: string;
   observacao: string | null;
   destino: string | null;
-  statusRevisao: 'PENDENTE' | 'CONFIRMADA';
+  statusRevisao: ReviewStatus;
   confirmadoPorUsuarioId: number | null;
   confirmadoPorUsuarioNome: string | null;
   confirmadoEm: string | null;
