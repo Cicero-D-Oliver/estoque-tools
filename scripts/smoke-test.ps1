@@ -109,7 +109,12 @@ function Assert-Status {
 function Assert-NoDuplicates {
     param([object[]]$Items, [string]$Property, [string]$Description)
 
-    $values = @($Items | ForEach-Object { $_.$Property })
+    $values = @($Items | Where-Object { $null -ne $_ } | ForEach-Object {
+        if ($_.PSObject.Properties.Name -notcontains $Property) {
+            throw "A resposta de $Description não contém a propriedade esperada '$Property'."
+        }
+        $_.$Property
+    })
     $uniqueValues = @($values | Sort-Object -Unique)
     if ($values.Count -ne $uniqueValues.Count) {
         throw "Foram encontradas duplicidades em $Description, propriedade $Property."
@@ -344,9 +349,9 @@ try {
     Assert-Status -Response $itemsFirstResponse -Expected 200 -Description "Listagem de itens"
     $toolsFirstResponse = Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/ferramentas" -Headers $tenantHeaders
     Assert-Status -Response $toolsFirstResponse -Expected 200 -Description "Listagem de ferramentas"
-    $usersFirst = @($usersFirstResponse.Content | ConvertFrom-Json)
-    $itemsFirst = @($itemsFirstResponse.Content | ConvertFrom-Json)
-    $toolsFirst = @($toolsFirstResponse.Content | ConvertFrom-Json)
+    $usersFirst = @($usersFirstResponse.Content | ConvertFrom-Json | ForEach-Object { $_ })
+    $itemsFirst = @($itemsFirstResponse.Content | ConvertFrom-Json | ForEach-Object { $_ })
+    $toolsFirst = @($toolsFirstResponse.Content | ConvertFrom-Json | ForEach-Object { $_ })
     Assert-NoDuplicates -Items $usersFirst -Property "email" -Description "usuários"
     Assert-NoDuplicates -Items $itemsFirst -Property "codigo" -Description "itens"
     Assert-NoDuplicates -Items $toolsFirst -Property "patrimonio" -Description "ferramentas"
@@ -381,9 +386,9 @@ try {
     Assert-Status -Response $itemsSecondResponse -Expected 200 -Description "Listagem de itens após reinicialização"
     $toolsSecondResponse = Invoke-SmokeHttp -Method "GET" -Uri "$baseUrl/api/ferramentas" -Headers $secondTenantHeaders
     Assert-Status -Response $toolsSecondResponse -Expected 200 -Description "Listagem de ferramentas após reinicialização"
-    $usersSecond = @($usersSecondResponse.Content | ConvertFrom-Json)
-    $itemsSecond = @($itemsSecondResponse.Content | ConvertFrom-Json)
-    $toolsSecond = @($toolsSecondResponse.Content | ConvertFrom-Json)
+    $usersSecond = @($usersSecondResponse.Content | ConvertFrom-Json | ForEach-Object { $_ })
+    $itemsSecond = @($itemsSecondResponse.Content | ConvertFrom-Json | ForEach-Object { $_ })
+    $toolsSecond = @($toolsSecondResponse.Content | ConvertFrom-Json | ForEach-Object { $_ })
     Assert-NoDuplicates -Items $usersSecond -Property "email" -Description "usuários após reinicialização"
     Assert-NoDuplicates -Items $itemsSecond -Property "codigo" -Description "itens após reinicialização"
     Assert-NoDuplicates -Items $toolsSecond -Property "patrimonio" -Description "ferramentas após reinicialização"

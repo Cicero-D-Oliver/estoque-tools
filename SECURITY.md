@@ -3,9 +3,10 @@
 ## Modelo adotado
 
 A API usa access tokens JWT HS256 de curta duração e refresh tokens opacos de
-256 bits. O valor do refresh token é entregue somente ao cliente; o banco guarda
-apenas seu SHA-256. Cada uso faz rotação obrigatória. A reutilização de um token
-já rotacionado invalida toda a família daquela sessão.
+256 bits. O refresh token é entregue exclusivamente em cookie `HttpOnly`; o
+JavaScript não consegue lê-lo e o banco guarda apenas seu SHA-256. Cada uso faz
+rotação obrigatória. A reutilização de um token já rotacionado invalida toda a
+família daquela sessão.
 
 Os access tokens carregam a versão de credencial da conta. Troca ou recuperação
 de senha e `logout-all` incrementam essa versão, revogam todos os refresh tokens
@@ -15,8 +16,8 @@ válido somente até sua expiração curta.
 
 Endpoints:
 
-- `POST /api/auth/login`: emite access e refresh token;
-- `POST /api/auth/refresh`: rotaciona o refresh e emite novo par;
+- `POST /api/auth/login`: emite access token e define o cookie de refresh;
+- `POST /api/auth/refresh`: consome e rotaciona o cookie e emite novo access;
 - `POST /api/auth/logout`: revoga a sessão indicada, de forma idempotente;
 - `POST /api/auth/logout-all`: revoga todas as sessões da conta;
 - `PUT /api/auth/password`: exige senha atual e revoga as sessões anteriores.
@@ -41,6 +42,8 @@ Os valores são configuráveis por ambiente:
 | `APP_PASSWORD_RESET_TOKEN_TTL` | `30m` | validade do token de recuperação |
 | `APP_MAX_FAILED_LOGIN_ATTEMPTS` | `5` | falhas antes do bloqueio |
 | `APP_LOGIN_LOCK_DURATION` | `15m` | duração do bloqueio temporário |
+| `APP_REFRESH_COOKIE_SECURE` | `false` (`true` em produção) | restringe o cookie a HTTPS |
+| `APP_REFRESH_COOKIE_SAME_SITE` | `Lax` | política `Strict`, `Lax` ou `None` |
 
 ## Recuperação de senha
 
@@ -93,3 +96,11 @@ No profile `prod`, OpenAPI e Swagger UI ficam desabilitados. CORS deve listar
 origens conhecidas, sem wildcard quando credenciais forem permitidas. O
 healthcheck expõe somente o estado necessário e endpoints de negócio exigem
 autenticação e membership ativa na organização selecionada.
+
+O cookie de refresh usa `HttpOnly`, `Path=/api/auth` e `Secure` obrigatório no
+profile `prod`. `SameSite=Lax` é o padrão. Se frontend e API precisarem operar
+em sites diferentes, configure explicitamente `SameSite=None`, mantenha
+`Secure=true` e use HTTPS. Login, renovação e logout validam a origem contra a
+mesma allowlist do CORS; requisições cross-site não autorizadas são rejeitadas.
+Essa defesa é específica aos endpoints que aceitam o cookie e não desabilita a
+autorização normal dos demais endpoints.

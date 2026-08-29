@@ -4,7 +4,7 @@ import { sessionStore } from '../lib/session-store'
 import { authService, type LoginInput, type RegisterInput } from '../services/auth-service'
 import type { Account } from '../types/api'
 
-type AuthStatus = 'anonymous' | 'authenticating' | 'authenticated'
+type AuthStatus = 'anonymous' | 'restoring' | 'authenticating' | 'authenticated'
 
 interface AuthContextValue {
   status: AuthStatus
@@ -16,8 +16,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<AuthStatus>('anonymous')
+export function AuthProvider({
+  children,
+  restoreOnMount = true,
+}: {
+  children: React.ReactNode
+  restoreOnMount?: boolean
+}) {
+  const [status, setStatus] = useState<AuthStatus>(restoreOnMount ? 'restoring' : 'anonymous')
   const [account, setAccount] = useState<Account | null>(null)
 
   useEffect(() => sessionStore.subscribe((session) => {
@@ -27,6 +33,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       organizationStore.clear()
     }
   }), [])
+
+  useEffect(() => {
+    if (!restoreOnMount) return
+    let active = true
+    void (async () => {
+      try {
+        await authService.restore()
+        const currentAccount = await authService.me()
+        if (active) {
+          setAccount(currentAccount)
+          setStatus('authenticated')
+        }
+      } catch {
+        if (active) sessionStore.clear()
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [restoreOnMount])
 
   const login = useCallback(async (input: LoginInput) => {
     setStatus('authenticating')
@@ -50,10 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [login])
 
   const logout = useCallback(async () => {
-    const refreshToken = sessionStore.get()?.refreshToken
     try {
-      if (refreshToken) {
-        await authService.logout(refreshToken)
+      if (sessionStore.get()) {
+        await authService.logout()
       }
     } finally {
       sessionStore.clear()

@@ -17,8 +17,6 @@ export interface AccessTokenResponse {
   accessToken: string
   expiresIn: number
   expiresAt: string
-  refreshToken: string
-  refreshExpiresAt: string
 }
 
 export interface Organization {

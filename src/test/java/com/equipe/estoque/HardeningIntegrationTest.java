@@ -24,6 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -91,13 +92,28 @@ class HardeningIntegrationTest extends SecurityTestSupport {
                         .header("Access-Control-Request-Method", "POST")
                         .header("Access-Control-Request-Headers", "Content-Type,Authorization,X-Organization-Id"))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"));
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
 
         mockMvc.perform(options("/api/auth/register")
                         .header("Origin", "https://origem-nao-permitida.example")
                         .header("Access-Control-Request-Method", "POST"))
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+    }
+
+    @Test
+    void deveBloquearOrigemNaoPermitidaNosEndpointsDoCookieDeSessao() throws Exception {
+        mockMvc.perform(post("/api/auth/refresh")
+                        .header("Origin", "https://origem-nao-permitida.example"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"))
+                .andExpect(content().string("Invalid CORS request"));
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .header("Sec-Fetch-Site", "cross-site"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("ACESSO_NEGADO"));
     }
 
     @Test

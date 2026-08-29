@@ -5,8 +5,6 @@ export const sessionFixture: AccessTokenResponse = {
   accessToken: 'access-token-for-test',
   expiresIn: 900,
   expiresAt: '2026-08-21T15:15:00Z',
-  refreshToken: 'refresh-token-for-test',
-  refreshExpiresAt: '2026-09-20T15:00:00Z',
 }
 
 export const accountFixture: Account = {

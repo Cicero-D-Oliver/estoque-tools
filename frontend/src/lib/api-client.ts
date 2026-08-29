@@ -60,15 +60,10 @@ async function parseError(response: Response): Promise<ApiError> {
 }
 
 async function renewSession(): Promise<void> {
-  const currentSession = sessionStore.get()
-  if (!currentSession?.refreshToken) {
-    throw new ApiError('Sua sessão expirou. Entre novamente.', 401, 'SESSAO_EXPIRADA')
-  }
-
   const response = await fetch(`${apiBaseUrl}/api/auth/refresh`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ refreshToken: currentSession.refreshToken }),
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
   })
 
   if (!response.ok) {
@@ -114,9 +109,13 @@ async function request<T>(
   }
 
   try {
-    const response = await fetch(`${apiBaseUrl}${path}`, { ...fetchOptions, headers })
+    const response = await fetch(`${apiBaseUrl}${path}`, {
+      ...fetchOptions,
+      credentials: fetchOptions.credentials ?? 'include',
+      headers,
+    })
 
-    if (response.status === 401 && allowRetry && !skipAuthRefresh && currentSession?.refreshToken) {
+    if (response.status === 401 && allowRetry && !skipAuthRefresh && currentSession?.accessToken) {
       try {
         await ensureRenewedSession()
         return await request<T>(path, options, false)
@@ -163,3 +162,5 @@ export const apiClient = {
     method: 'DELETE',
   }),
 }
+
+export const restoreSession = ensureRenewedSession

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -42,6 +43,10 @@ public class SecurityProperties {
 
     @NotNull
     private Duration loginLockDuration = Duration.ofMinutes(15);
+
+    @Valid
+    @NotNull
+    private RefreshCookie refreshCookie = new RefreshCookie();
 
     @AssertTrue(message = "A chave JWT deve estar em Base64 e conter pelo menos 32 bytes")
     public boolean isJwtSecretStrong() {
@@ -83,5 +88,35 @@ public class SecurityProperties {
 
     public byte[] decodedSecret() {
         return Base64.getDecoder().decode(jwtSecret);
+    }
+
+    @Getter
+    @Setter
+    public static class RefreshCookie {
+
+        @NotBlank
+        private String sameSite = "Lax";
+
+        @NotBlank
+        private String path = "/api/auth";
+
+        private boolean secure;
+
+        @AssertTrue(message = "SameSite do cookie de refresh deve ser Strict, Lax ou None")
+        public boolean isSameSiteValid() {
+            return "Strict".equalsIgnoreCase(sameSite)
+                    || "Lax".equalsIgnoreCase(sameSite)
+                    || "None".equalsIgnoreCase(sameSite);
+        }
+
+        @AssertTrue(message = "Cookie SameSite=None exige Secure")
+        public boolean isCrossSiteCookieSafe() {
+            return !"None".equalsIgnoreCase(sameSite) || secure;
+        }
+
+        @AssertTrue(message = "O cookie de refresh deve ficar restrito a /api/auth")
+        public boolean isPathRestricted() {
+            return "/api/auth".equals(path);
+        }
     }
 }

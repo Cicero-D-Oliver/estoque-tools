@@ -12,7 +12,7 @@ export function renderWithProviders(ui: React.ReactNode, initialEntries = ['/'])
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
+        <AuthProvider restoreOnMount={false}>
           <OrganizationProvider>{ui}</OrganizationProvider>
         </AuthProvider>
       </QueryClientProvider>

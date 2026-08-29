@@ -1,4 +1,4 @@
-import { apiClient } from '../lib/api-client'
+import { apiClient, restoreSession } from '../lib/api-client'
 import type { AccessTokenResponse, Account } from '../types/api'
 
 export interface LoginInput {
@@ -17,9 +17,8 @@ export const authService = {
   register: (input: RegisterInput) => apiClient.post<Account>('/api/auth/register', input, {
     skipAuthRefresh: true,
   }),
+  restore: restoreSession,
   me: () => apiClient.get<Account>('/api/auth/me'),
-  logout: (refreshToken: string) => apiClient.post<void>('/api/auth/logout', { refreshToken }, {
-    skipAuthRefresh: true,
-  }),
+  logout: () => apiClient.post<void>('/api/auth/logout'),
   logoutAll: () => apiClient.post<void>('/api/auth/logout-all'),
 }
