@@ -8,6 +8,9 @@ export type RootStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Tools: undefined;
+  Inventory: undefined;
+  Movements: undefined;
+  Team: undefined;
   Profile: undefined;
 };
 
@@ -16,8 +19,7 @@ export type ToolStackParamList = {
   ToolDetails: { toolId: number };
 };
 
-export const futureOperationalRoutes = [
-  'Estoque',
-  'Movimentacoes',
-  'Equipe',
-] as const;
+export type InventoryStackParamList = {
+  InventoryList: undefined;
+  InventoryDetails: { itemId: number };
+};

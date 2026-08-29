@@ -12,9 +12,12 @@ Cliente React Native/Expo da mesma API usada pelo MVP web. Esta base reaproveita
 - módulo Ferramentas com lista, busca, filtros e detalhe;
 - retirada, devolução, transferência, manutenção, conclusão e perda;
 - histórico operacional e ações administrativas conforme o perfil;
-- rotas protegidas de Início, Ferramentas e Perfil.
+- Estoque com entrada, saída, correção e histórico;
+- Movimentações unificadas com confirmação administrativa;
+- Equipe com aprovação, perfis e remoção lógica de acesso;
+- rotas protegidas de Início, Ferramentas, Estoque, Movimentações, Equipe e Perfil.
 
-Estoque, Movimentações e Equipe serão implementados nos próximos blocos. Nenhum botão simulado é exibido enquanto essas telas não estiverem prontas.
+Equipe é exibida somente para ADMIN, conforme a autorização real do backend. Nenhum botão simulado é exibido.
 
 ## Configuração
 
