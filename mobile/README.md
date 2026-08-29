@@ -9,9 +9,12 @@ Cliente React Native/Expo da mesma API usada pelo MVP web. Esta base reaproveita
 - logout com revogação no servidor;
 - listagem, seleção e criação de ambientes;
 - Dashboard operacional por organização e perfil;
-- rotas protegidas de Início e Perfil.
+- módulo Ferramentas com lista, busca, filtros e detalhe;
+- retirada, devolução, transferência, manutenção, conclusão e perda;
+- histórico operacional e ações administrativas conforme o perfil;
+- rotas protegidas de Início, Ferramentas e Perfil.
 
-Ferramentas, Estoque, Movimentações e Equipe serão implementados nos próximos blocos. Nenhum botão simulado é exibido enquanto essas telas não estiverem prontas.
+Estoque, Movimentações e Equipe serão implementados nos próximos blocos. Nenhum botão simulado é exibido enquanto essas telas não estiverem prontas.
 
 ## Configuração
 
@@ -49,5 +52,6 @@ npm.cmd run start
 - Access token permanece apenas em memória.
 - Refresh token rotativo fica no cofre seguro do Android por `expo-secure-store`.
 - Cache de servidor é isolado pela organização ativa.
+- Lista, detalhe, histórico e Dashboard são invalidados por organização após operações.
 - Logout revoga a sessão no backend e limpa o cofre e o cache local.
 - O app pede apenas acesso à internet; câmera, localização, contatos, SMS, microfone e arquivos estão bloqueados neste bloco.
