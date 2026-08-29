@@ -1,6 +1,14 @@
 export type MemberProfile = 'ADMIN' | 'OPERADOR' | 'CONSULTA';
 export type MemberStatus = 'PENDENTE' | 'ATIVO' | 'REJEITADO' | 'REMOVIDO';
 export type ToolStatus = 'DISPONIVEL' | 'EMPRESTADA' | 'MANUTENCAO' | 'PERDIDA';
+export type ToolMovementType =
+  | 'RETIRADA'
+  | 'DEVOLUCAO'
+  | 'TRANSFERENCIA'
+  | 'MANUTENCAO'
+  | 'CONCLUSAO_MANUTENCAO'
+  | 'PERDA'
+  | 'CORRECAO';
 
 export interface Account {
   id: number;
@@ -66,7 +74,7 @@ export interface ToolMovement {
   responsavelUsuarioNome: string | null;
   responsavelAnteriorUsuarioId: number | null;
   responsavelAnteriorUsuarioNome: string | null;
-  tipoMovimentacao: string;
+  tipoMovimentacao: ToolMovementType;
   dataHora: string;
   observacao: string | null;
   destino: string | null;
@@ -74,6 +82,11 @@ export interface ToolMovement {
   confirmadoPorUsuarioId: number | null;
   confirmadoPorUsuarioNome: string | null;
   confirmadoEm: string | null;
+}
+
+export interface TransferResponsible {
+  id: number;
+  nome: string;
 }
 
 export interface ApiErrorPayload {

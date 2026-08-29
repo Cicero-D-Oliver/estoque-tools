@@ -7,11 +7,16 @@ export type RootStackParamList = {
 
 export type MainTabParamList = {
   Home: undefined;
+  Tools: undefined;
   Profile: undefined;
 };
 
+export type ToolStackParamList = {
+  ToolList: undefined;
+  ToolDetails: { toolId: number };
+};
+
 export const futureOperationalRoutes = [
-  'Ferramentas',
   'Estoque',
   'Movimentacoes',
   'Equipe',
