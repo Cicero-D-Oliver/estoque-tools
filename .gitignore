@@ -39,3 +39,11 @@ Thumbs.db
 
 # Cache de ferramentas frontend
 frontend/.vite/
+
+# Aplicativo mobile Expo
+mobile/node_modules/
+mobile/.expo/
+mobile/.expo-home/
+mobile/dist/
+mobile/coverage/
+mobile/jest-results.json

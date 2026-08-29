@@ -57,7 +57,9 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/auth/register",
                                 "/api/auth/login",
-                                "/api/auth/refresh"
+                                "/api/auth/refresh",
+                                "/api/mobile/auth/login",
+                                "/api/mobile/auth/refresh"
                         ).permitAll()
                         .requestMatchers(
                                 "/actuator/health",
