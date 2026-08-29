@@ -187,7 +187,7 @@ jobs:
         run: npm run test:ci -- --json --outputFile=jest-results.json
 
       - name: Validar resultado dos testes
-        run: node scripts/verify-test-results.mjs jest-results.json 146
+        run: node scripts/verify-test-results.mjs jest-results.json 149
 
       - name: Auditar dependências
         run: npm audit --audit-level=moderate
