@@ -39,6 +39,7 @@ jobs:
             "com.equipe.estoque.ApplicationFlowIntegrationTest",
             "com.equipe.estoque.AuthenticationSecurityIntegrationTest",
             "com.equipe.estoque.HardeningIntegrationTest",
+            "com.equipe.estoque.MobileAuthenticationIntegrationTest",
             "com.equipe.estoque.OrganizationDataIsolationIntegrationTest",
             "com.equipe.estoque.OrganizationAuthorizationIntegrationTest",
             "com.equipe.estoque.OrganizationsFoundationIntegrationTest",
@@ -50,7 +51,7 @@ jobs:
             "com.equipe.estoque.ToolWithdrawalConcurrencyIntegrationTest",
             "com.equipe.estoque.config.SQLiteLegacyBaselineCallbackTest"
           )
-          $minimumTests = 112
+          $minimumTests = 118
           $total = 0
           $executedSuites = @()
           foreach ($report in $reports) {
@@ -144,3 +145,52 @@ jobs:
 
       - name: Build de produção
         run: npm run build
+
+  mobile:
+    name: Android Expo
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    env:
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_APP_ENV: production
+      EXPO_PUBLIC_API_URL: https://api.example.invalid
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Exigir lockfile mobile
+        run: test -f package-lock.json
+
+      - name: Configurar Node.js 24 e cache npm
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Instalação reproduzível
+        run: npm ci
+
+      - name: Validar compatibilidade Expo
+        run: npx expo install --check
+
+      - name: Validar TypeScript
+        run: npm run typecheck
+
+      - name: Testes automatizados
+        run: npm run test:ci -- --json --outputFile=jest-results.json
+
+      - name: Validar resultado dos testes
+        run: node scripts/verify-test-results.mjs jest-results.json 20
+
+      - name: Auditar dependências
+        run: npm audit --audit-level=moderate
+
+      - name: Gerar bundle Android
+        run: npm run export:android
