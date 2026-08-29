@@ -32,7 +32,17 @@ EXPO_PUBLIC_API_URL=http://10.0.2.2:8080
 - Aparelho físico: use o endereço LAN do backend.
 - Produção: `EXPO_PUBLIC_APP_ENV=production` exige uma URL HTTPS.
 
-Nenhuma chave do backend deve ser incluída no app.
+Builds com `EXPO_PUBLIC_APP_ENV=development` permitem HTTP para laboratório/LAN. Builds com `production` bloqueiam tráfego sem TLS e exigem HTTPS.
+
+`EXPO_PUBLIC_API_URL` é incorporada ao bundle durante o build. Portanto, gere um novo APK ao trocar o servidor. O endereço não é secret, mas ficará legível no aplicativo; nenhuma chave do backend deve ser incluída no app.
+
+### Endereços usuais
+
+- Emulador Android com backend no mesmo PC: `http://10.0.2.2:8080`.
+- Celular e PC-servidor na mesma rede: `http://<IP-LAN-DO-PC>:8080`.
+- Servidor futuro em nuvem: URL pública HTTPS, por exemplo `https://api.seudominio.com`.
+
+O backend deve escutar em uma interface acessível pela rede e seu firewall deve liberar somente a porta necessária. Nunca publique o secret JWT do backend no aplicativo.
 
 ## Comandos
 
@@ -50,6 +60,31 @@ Para desenvolvimento interativo:
 npm.cmd run start
 ```
 
+## APK interno
+
+O profile `internal` de `eas.json` produz um APK instalável, sem configurar publicação na Play Store. A URL da API é lida do ambiente `preview` do EAS no momento do build.
+
+Primeiro vincule este diretório a um projeto da conta Expo e cadastre a URL pública de conexão:
+
+```powershell
+npx eas-cli@latest login
+npx eas-cli@latest init
+npx eas-cli@latest env:set --name EXPO_PUBLIC_API_URL --value "https://api.seudominio.com" --environment preview --visibility plaintext
+npx eas-cli@latest env:set --name EXPO_PUBLIC_APP_ENV --value "production" --environment preview --visibility plaintext
+```
+
+Depois gere o APK:
+
+```powershell
+npx eas-cli@latest build --platform android --profile internal
+```
+
+O EAS fornece um link para baixar o APK assinado. No aparelho, baixe o arquivo, autorize a instalação dessa origem quando o Android solicitar e conclua a instalação. Em uma máquina com Android SDK, também é possível usar `adb install caminho\estoque-tools.apk`.
+
+Antes de cada nova distribuição, atualize `version` e aumente `android.versionCode` em `app.config.ts`. Nunca versione `.env`, keystore, senha, token Expo ou credencial de assinatura.
+
+O projeto ainda não possui assets próprios adequados para ícone e splash. O Expo usará os padrões até que os arquivos oficiais da identidade visual sejam fornecidos; esta pendência não deve ser resolvida com arte improvisada.
+
 ## Segurança
 
 - Access token permanece apenas em memória.
@@ -57,4 +92,5 @@ npm.cmd run start
 - Cache de servidor é isolado pela organização ativa.
 - Lista, detalhe, histórico e Dashboard são invalidados por organização após operações.
 - Logout revoga a sessão no backend e limpa o cofre e o cache local.
-- O app pede apenas acesso à internet; câmera, localização, contatos, SMS, microfone e arquivos estão bloqueados neste bloco.
+- Backup de dados do aplicativo está desabilitado no Android.
+- O app pede apenas acesso à internet; câmera, localização, contatos, SMS, telefone, microfone, notificações, mídia, arquivos, acessibilidade e overlay estão explicitamente bloqueados.
