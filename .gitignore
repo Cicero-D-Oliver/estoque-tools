@@ -51,3 +51,5 @@ mobile/coverage/
 mobile/jest-results.json
 mobile/android/
 mobile/ios/
+*.apk
+*.aab

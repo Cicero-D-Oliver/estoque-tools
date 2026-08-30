@@ -62,7 +62,12 @@ npm.cmd run start
 
 ## APK interno
 
-O profile `internal` de `eas.json` produz um APK instalável, sem configurar publicação na Play Store. A URL da API é lida do ambiente `preview` do EAS no momento do build.
+Os profiles `internal` e `preview-lan` de `eas.json` produzem APKs instaláveis, sem configurar publicação na Play Store:
+
+- `internal` usa o ambiente EAS `preview` e mantém as regras de produção: a API precisa usar HTTPS;
+- `preview-lan` usa o ambiente EAS `development` e permite HTTP somente para uma demonstração controlada na rede local.
+
+A URL da API é lida do ambiente EAS no momento do build e nunca fica gravada no repositório.
 
 Primeiro vincule este diretório a um projeto da conta Expo e cadastre a URL pública de conexão:
 
@@ -70,7 +75,6 @@ Primeiro vincule este diretório a um projeto da conta Expo e cadastre a URL pú
 npx eas-cli@latest login
 npx eas-cli@latest init
 npx eas-cli@latest env:set --name EXPO_PUBLIC_API_URL --value "https://api.seudominio.com" --environment preview --visibility plaintext
-npx eas-cli@latest env:set --name EXPO_PUBLIC_APP_ENV --value "production" --environment preview --visibility plaintext
 ```
 
 Depois gere o APK:
@@ -79,11 +83,21 @@ Depois gere o APK:
 npx eas-cli@latest build --platform android --profile internal
 ```
 
+Para uma demonstração LAN, descubra o IPv4 atual da máquina, cadastre a URL apenas no ambiente `development` do EAS e use o profile dedicado:
+
+```powershell
+ipconfig
+npx eas-cli@latest env:set --name EXPO_PUBLIC_API_URL --value "http://<IP-LAN-ATUAL>:8080" --environment development --visibility plaintext
+npx eas-cli@latest build --platform android --profile preview-lan
+```
+
+O endereço LAN é configuração de build e deve ser atualizado quando a rede mudar; ele não deve ser hardcoded no código nem no `eas.json`.
+
 O EAS fornece um link para baixar o APK assinado. No aparelho, baixe o arquivo, autorize a instalação dessa origem quando o Android solicitar e conclua a instalação. Em uma máquina com Android SDK, também é possível usar `adb install caminho\estoque-tools.apk`.
 
 Antes de cada nova distribuição, atualize `version` e aumente `android.versionCode` em `app.config.ts`. Nunca versione `.env`, keystore, senha, token Expo ou credencial de assinatura.
 
-O projeto ainda não possui assets próprios adequados para ícone e splash. O Expo usará os padrões até que os arquivos oficiais da identidade visual sejam fornecidos; esta pendência não deve ser resolvida com arte improvisada.
+Os assets oficiais ficam em `assets/`. O arquivo mestre vetorial reutilizável é `assets/brand/estoque-tools-icon-master.svg`; os PNGs de 1024 × 1024 são derivados do mesmo símbolo geométrico usado pelo frontend web. Ícone adaptativo, ícone monocromático e splash não contêm texto e respeitam a área segura do Android.
 
 ## Segurança
 

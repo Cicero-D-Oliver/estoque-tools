@@ -5,13 +5,27 @@ const isProductionBuild = process.env.EXPO_PUBLIC_APP_ENV === 'production';
 const config: ExpoConfig = {
   name: 'Estoque Tools',
   slug: 'estoque-tools',
+  owner: 'cicerodoliver',
   version: '1.0.0',
+  icon: './assets/icon.png',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
+  backgroundColor: '#0B2F57',
+  extra: {
+    eas: {
+      projectId: '73062e90-db02-413a-9b68-cd105d86d16c',
+    },
+  },
   android: {
     package: 'com.equipe.estoquetools',
     versionCode: 1,
     allowBackup: false,
+    icon: './assets/icon.png',
+    adaptiveIcon: {
+      foregroundImage: './assets/adaptive-icon.png',
+      monochromeImage: './assets/monochrome-icon.png',
+      backgroundColor: '#1559A6',
+    },
     permissions: ['INTERNET'],
     blockedPermissions: [
       'android.permission.CAMERA',
@@ -42,6 +56,15 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-secure-store',
+    [
+      'expo-splash-screen',
+      {
+        backgroundColor: '#0B2F57',
+        image: './assets/splash-icon.png',
+        imageWidth: 220,
+        resizeMode: 'contain',
+      },
+    ],
     [
       'expo-build-properties',
       {

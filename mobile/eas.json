@@ -6,6 +6,19 @@
     "internal": {
       "distribution": "internal",
       "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview-lan": {
+      "distribution": "internal",
+      "environment": "development",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "development"
+      },
       "android": {
         "buildType": "apk"
       }

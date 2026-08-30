@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -47,7 +48,13 @@ export function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.brand}>
-          <View style={styles.mark}><Text style={styles.markText}>ET</Text></View>
+          <View style={styles.mark}>
+            <Image
+              accessibilityIgnoresInvertColors
+              source={require('../../assets/splash-icon.png')}
+              style={styles.markImage}
+            />
+          </View>
           <Text variant="headlineMedium" style={styles.brandName}>ESTOQUE TOOLS</Text>
         </View>
 
@@ -117,7 +124,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  markText: { color: '#FFFFFF', fontWeight: '800', fontSize: 20 },
+  markImage: { width: 54, height: 54 },
   brandName: { color: '#FFFFFF', fontWeight: '800', letterSpacing: 1 },
   form: { backgroundColor: colors.surface, padding: spacing.lg, gap: spacing.md, borderRadius: 12 },
   title: { color: colors.text, fontWeight: '700' },
