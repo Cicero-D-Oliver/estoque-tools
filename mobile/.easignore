@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.expo/
+.expo-home/
+
+*.apk
+*.aab
+jest-results*.json
+
+.env
+.env.*
+!.env.example

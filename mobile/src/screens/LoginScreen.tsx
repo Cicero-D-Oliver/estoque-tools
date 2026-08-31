@@ -9,11 +9,15 @@ import {
   View,
 } from 'react-native';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '@/providers/AuthProvider';
 import { loginErrorMessage } from '@/utils/errors';
 import { colors, spacing } from '@/theme';
+import type { RootStackParamList } from '@/navigation/types';
 
-export function LoginScreen() {
+type LoginScreenProps = NativeStackScreenProps<RootStackParamList, 'Login'>;
+
+export function LoginScreen({ navigation, route }: LoginScreenProps) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,7 +45,7 @@ export function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.background}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
         contentContainerStyle={styles.content}
@@ -60,6 +64,11 @@ export function LoginScreen() {
 
         <View style={styles.form}>
           <Text variant="headlineSmall" style={styles.title}>Entrar</Text>
+          {route.params?.notice ? (
+            <View style={styles.notice} accessibilityRole="alert">
+              <Text style={styles.noticeText}>{route.params.notice}</Text>
+            </View>
+          ) : null}
           {error ? (
             <View style={styles.error} accessibilityRole="alert">
               <Text style={styles.errorText}>{error}</Text>
@@ -105,6 +114,15 @@ export function LoginScreen() {
           >
             Entrar
           </Button>
+          <Button
+            mode="text"
+            contentStyle={styles.secondaryButtonContent}
+            disabled={submitting}
+            onPress={() => navigation.navigate('Register')}
+            testID="login-register"
+          >
+            Criar conta
+          </Button>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -130,5 +148,8 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontWeight: '700' },
   error: { backgroundColor: colors.dangerSoft, borderLeftWidth: 3, borderLeftColor: colors.danger, padding: 10 },
   errorText: { color: colors.danger },
+  notice: { backgroundColor: colors.successSoft, borderLeftWidth: 3, borderLeftColor: colors.success, padding: 10 },
+  noticeText: { color: colors.success },
   buttonContent: { minHeight: 50 },
+  secondaryButtonContent: { minHeight: 48 },
 });

@@ -5,6 +5,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useOrganization } from '@/providers/OrganizationProvider';
 import { SplashScreen } from '@/screens/SplashScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
+import { RegisterScreen } from '@/screens/RegisterScreen';
 import { OrganizationsScreen } from '@/screens/OrganizationsScreen';
 import { MainNavigator } from './MainNavigator';
 import type { RootStackParamList } from './types';
@@ -33,7 +34,10 @@ export function RootNavigator() {
         {route === 'Splash' ? (
           <Stack.Screen name="Splash" component={SplashScreen} />
         ) : route === 'Login' ? (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Group>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+          </Stack.Group>
         ) : route === 'Main' ? (
           <Stack.Screen name="Main" component={MainNavigator} />
         ) : (
