@@ -125,6 +125,7 @@ class OrganizationsFoundationIntegrationTest {
     @Test
     void deveRejeitarDadosInvalidosSemCriarOrganizacao() {
         Usuario usuario = criarUsuario("Criador", "criador-invalido@example.com");
+        long organizacoesAntes = organizacaoRepository.count();
 
         assertThrows(BusinessException.class, () -> organizacaoService.criar(null, usuario.getId()));
         assertThrows(BusinessException.class, () -> organizacaoService.criar("   ", usuario.getId()));
@@ -140,7 +141,7 @@ class OrganizationsFoundationIntegrationTest {
                 BusinessException.class,
                 () -> organizacaoService.criar("Organização", usuario.getId())
         );
-        assertEquals(0, organizacaoRepository.count());
+        assertEquals(organizacoesAntes, organizacaoRepository.count());
     }
 
     private Usuario criarUsuario(String nome, String email) {
