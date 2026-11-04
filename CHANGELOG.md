@@ -4,6 +4,26 @@ Todas as alterações relevantes são documentadas neste arquivo.
 
 ## [Não lançado] — 2026-08-05 — Migrações Flyway
 
+### Onboarding corporativo fechado — 2026-11-04
+
+- O registro público passa a ficar desabilitado por padrão; produção rejeita o
+  startup se `APP_PUBLIC_REGISTRATION_ENABLED=true`.
+- Adicionado bootstrap persistente e de uso único para o e-mail definido em
+  `APP_INITIAL_ADMIN_EMAIL`, sem a regra insegura de promover o primeiro cadastro.
+- Administradores podem enviar convites `OPERADOR` ou `CONSULTA` para o domínio
+  corporativo exato. A conta e o vínculo só são criados/ativados após confirmação.
+- Tokens de confirmação são aleatórios, de uso único, expiram e são persistidos
+  apenas como SHA-256. Reenvios possuem cooldown configurável e são idempotentes.
+- A entrega de e-mail foi isolada por adaptador (`disabled`, `memory` ou SMTP);
+  produção exige URL HTTPS, remetente e configuração SMTP externa.
+- A migration Flyway V9 adiciona convites e o singleton de bootstrap em SQLite e
+  PostgreSQL sem modificar V1–V8. Hibernate continua usando `validate`.
+- Web recebeu ativação responsiva e removeu o cadastro público. Android mantém
+  apenas login e administração de convites; a confirmação abre a interface Web.
+- Expo permaneceu no SDK 57 e foi atualizado apenas para seu patch compatível.
+  O Expo Doctor passou 21/21; a classificação do `npm audit` está em
+  `MOBILE_SECURITY_AUDIT.md`, sem `audit fix --force` ou migração para SDK 58.
+
 ### Fluxo operacional de ferramentas — 2026-08-20
 
 - Adicionado o registro explícito de transferência, separando o executor

@@ -53,6 +53,18 @@ export interface OrganizationMember {
   removidoEm: string | null;
 }
 
+export type InvitationStatus = 'PENDENTE' | 'CONFIRMADO' | 'EXPIRADO' | 'REVOGADO';
+
+export interface OrganizationInvitation {
+  id: number;
+  email: string;
+  perfil: Exclude<MemberProfile, 'ADMIN'>;
+  status: InvitationStatus;
+  enviadoEm: string;
+  expiraEm: string;
+  confirmadoEm: string | null;
+}
+
 export interface Tool {
   id: number;
   patrimonio: string;

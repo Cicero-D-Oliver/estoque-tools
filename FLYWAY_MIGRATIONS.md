@@ -246,13 +246,13 @@ continuava com 77.824 bytes e SHA-256
 - Alterações futuras de schema devem ser novas versões; V1 e V2 não devem ser
   editadas depois de publicadas.
 
-## Estado atual validado (2026-08-20)
+## Estado atual validado (2026-11-04)
 
-- V1–V6 permanecem imutáveis. V7 é a candidata desta branch e também deverá
-  permanecer imutável depois da publicação; cada evolução exigirá nova versão.
-- SQLite novo, baseline legada e upgrade populado V6→V7 foram executados com
+- V1–V8 permanecem imutáveis. V9 adiciona `convites_onboarding` e o singleton
+  `onboarding_bootstrap`; depois da publicação, qualquer evolução exigirá V10+.
+- SQLite novo, baseline legada e upgrades populados foram executados com
   `foreign_key_check` íntegro e Hibernate `validate`.
-- PostgreSQL 17.11 foi executado via Testcontainers: banco novo, V1–V7,
-  Hibernate `validate`, upgrade populado V6→V7, constraints cross-tenant e
-  fluxo operacional real.
-- A suíte completa possui 102 testes, sem falhas, erros ou ignorados.
+- PostgreSQL 17.11 foi executado via Testcontainers: banco novo, V1–V9,
+  Hibernate `validate`, upgrades legados, constraints cross-tenant, fluxo
+  operacional real e as duas tabelas de onboarding.
+- A suíte completa possui 141 testes, sem falhas, erros ou ignorados.

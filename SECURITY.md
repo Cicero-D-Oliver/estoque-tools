@@ -42,8 +42,33 @@ Os valores são configuráveis por ambiente:
 | `APP_PASSWORD_RESET_TOKEN_TTL` | `30m` | validade do token de recuperação |
 | `APP_MAX_FAILED_LOGIN_ATTEMPTS` | `5` | falhas antes do bloqueio |
 | `APP_LOGIN_LOCK_DURATION` | `15m` | duração do bloqueio temporário |
+| `APP_ALLOWED_EMAIL_DOMAINS` | `scaladatacenters.com` | domínios exatos permitidos no onboarding |
+| `APP_PUBLIC_REGISTRATION_ENABLED` | `false` | bloqueia cadastro livre; produção exige `false` |
+| `APP_INITIAL_ADMIN_EMAIL` | sem padrão | identidade autorizada para o bootstrap único |
+| `APP_EMAIL_VERIFICATION_TOKEN_TTL` | `30m` | validade dos links de confirmação |
+| `APP_INVITATION_RESEND_COOLDOWN` | `5m` | proteção contra reenvio abusivo |
 | `APP_REFRESH_COOKIE_SECURE` | `false` (`true` em produção) | restringe o cookie a HTTPS |
 | `APP_REFRESH_COOKIE_SAME_SITE` | `Lax` | política `Strict`, `Lax` ou `None` |
+
+## Onboarding por convite
+
+O endpoint histórico de registro permanece fechado por padrão e não concede
+acesso sem convite. O bootstrap inicial exige correspondência exata com
+`APP_INITIAL_ADMIN_EMAIL`, confirmação do e-mail e um registro singleton
+persistente; não existe promoção automática do “primeiro usuário”.
+
+Convites de organização só podem ser emitidos por ADMIN ativo da mesma
+organização e nunca concedem perfil ADMIN. A política de domínio usa comparação
+exata e normalizada após `@`; sufixos, subdomínios e domínios semelhantes não
+são aceitos. O token opaco tem entropia criptográfica, é persistido apenas como
+SHA-256, expira, possui uso único e não aparece em logs ou respostas de listagem.
+O consumo do token é serializado por lock de banco e continua sujeito a vínculo,
+organização e criador ativos.
+
+Produção exige URL pública HTTPS, cadastro público desligado, remetente e SMTP
+externos. Quando `MAIL_SMTP_AUTH=true`, usuário e senha também são obrigatórios.
+O healthcheck SMTP fica desativado em desenvolvimento/testes sem servidor, mas é
+habilitado pelo profile `prod`.
 
 ## Recuperação de senha
 

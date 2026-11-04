@@ -44,6 +44,12 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- Adaptador SMTP opcional para entrega de convites e ativação. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- Healthcheck operacional sem expor detalhes internos. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -8,11 +8,15 @@ import {
   View,
 } from 'react-native';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '@/providers/AuthProvider';
+import type { RootStackParamList } from '@/navigation/types';
 import { loginErrorMessage } from '@/utils/errors';
 import { colors, spacing } from '@/theme';
 
-export function LoginScreen() {
+type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+
+export function LoginScreen({ route }: Props) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,7 +44,7 @@ export function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.background}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
         contentContainerStyle={styles.content}
@@ -53,6 +57,11 @@ export function LoginScreen() {
 
         <View style={styles.form}>
           <Text variant="headlineSmall" style={styles.title}>Entrar</Text>
+          {route.params?.notice ? (
+            <View style={styles.notice} accessibilityRole="alert">
+              <Text style={styles.noticeText}>{route.params.notice}</Text>
+            </View>
+          ) : null}
           {error ? (
             <View style={styles.error} accessibilityRole="alert">
               <Text style={styles.errorText}>{error}</Text>
@@ -123,5 +132,7 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontWeight: '700' },
   error: { backgroundColor: colors.dangerSoft, borderLeftWidth: 3, borderLeftColor: colors.danger, padding: 10 },
   errorText: { color: colors.danger },
+  notice: { backgroundColor: colors.successSoft, borderLeftWidth: 3, borderLeftColor: colors.success, padding: 10 },
+  noticeText: { color: colors.success },
   buttonContent: { minHeight: 50 },
 });

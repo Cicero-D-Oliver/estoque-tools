@@ -6,6 +6,8 @@ import com.equipe.estoque.enums.PerfilUsuario;
 import com.equipe.estoque.repository.UsuarioRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -54,6 +56,70 @@ class AuthenticationSecurityIntegrationTest extends SecurityTestSupport {
 
     @Autowired
     private SecurityProperties securityProperties;
+
+    @Test
+    void cadastroCorporativoValidoDeveSerAceito() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "nome", "Conta Corporativa",
+                                "email", "usuario@scaladatacenters.com",
+                                "senha", PASSWORD
+                        ))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("usuario@scaladatacenters.com"));
+    }
+
+    @Test
+    void cadastroCorporativoUppercaseDeveNormalizarDominio() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "nome", "Conta Uppercase",
+                                "email", "USUARIO.UPPER@SCALADATACENTERS.COM",
+                                "senha", PASSWORD
+                        ))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("usuario.upper@scaladatacenters.com"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "usuario@gmail.com",
+            "usuario@scaladatacenters.com.br",
+            "usuario@scaladatacenters.com.fake.com",
+            "usuario@sub.scaladatacenters.com"
+    })
+    void cadastroDeveRejeitarDominioNaoAutorizado(String email) throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "nome", "Conta Externa",
+                                "email", email,
+                                "senha", PASSWORD
+                        ))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("REGRA_NEGOCIO"))
+                .andExpect(jsonPath("$.mensagem")
+                        .value("Use um e-mail corporativo autorizado."));
+    }
+
+    @Test
+    void politicaDeCadastroNaoDeveBloquearLoginDeContaLegadaExterna() throws Exception {
+        usuarioRepository.saveAndFlush(Usuario.builder()
+                .nome("Conta Legada Externa")
+                .email("legada@gmail.com")
+                .senhaHash(passwordEncoder.encode(PASSWORD))
+                .perfil(PerfilUsuario.CONSULTA)
+                .ativo(true)
+                .build());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("email", "legada@gmail.com", "senha", PASSWORD))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
 
     @Test
     void cadastroDeveArmazenarSomenteHashSeguroENuncaRetornaLo() throws Exception {

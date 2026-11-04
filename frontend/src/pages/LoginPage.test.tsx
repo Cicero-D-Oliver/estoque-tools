@@ -21,7 +21,7 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('E-mail')).toHaveAttribute('type', 'email')
     expect(screen.getByLabelText('Senha')).toHaveAttribute('type', 'password')
     expect(screen.getByRole('button', { name: 'Entrar' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Criar conta' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Criar conta' })).not.toBeInTheDocument()
     expect(screen.queryByText('Acesso seguro', { exact: false })).not.toBeInTheDocument()
     expect(screen.queryByText('Bem-vindo de volta')).not.toBeInTheDocument()
     expect(screen.queryByText('Entre para acessar o ambiente da sua organização.')).not.toBeInTheDocument()
@@ -36,12 +36,13 @@ describe('LoginPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Entrar' }))
     expect(await screen.findByText('Informe seu e-mail.')).toBeInTheDocument()
     expect(screen.getByText('Informe sua senha.')).toBeInTheDocument()
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/api/auth/'))).toBe(false)
   })
 
   it('autentica, consulta /me e segue para organizações', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
+      if (url.endsWith('/api/onboarding/bootstrap/status')) return jsonResponse({ disponivel: false })
       if (url.endsWith('/api/auth/login')) return jsonResponse(sessionFixture)
       if (url.endsWith('/api/auth/me')) return jsonResponse(accountFixture)
       if (url.endsWith('/api/organizacoes')) return jsonResponse([])
@@ -55,9 +56,9 @@ describe('LoginPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Entrar' }))
 
     expect(await screen.findByRole('heading', { name: /escolha uma organização/i })).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/auth/login')
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/api/auth/me')
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/api/auth/login'))).toBe(true)
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/api/auth/me'))).toBe(true)
   })
 
   it('mostra erro humano e genérico para credenciais inválidas', async () => {
@@ -85,5 +86,15 @@ describe('LoginPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível conectar ao servidor/i)
     expect(screen.getByRole('alert')).not.toHaveTextContent(/socket/i)
+  })
+
+  it('mostra ativação inicial somente quando o backend autoriza', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ disponivel: true })))
+    renderLogin()
+    expect(await screen.findByRole('link', { name: 'Ativar administrador inicial' })).toHaveAttribute(
+      'href',
+      '/ativar-admin',
+    )
+    expect(screen.queryByRole('link', { name: 'Criar conta' })).not.toBeInTheDocument()
   })
 })

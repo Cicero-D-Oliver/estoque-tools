@@ -416,7 +416,7 @@
 .operations-page,
 .team-page { display: grid; min-width: 0; gap: var(--space-5); }
 .operations-page__heading,
-.team-page__heading { display: flex; min-height: 2.8rem; align-items: center; }
+.team-page__heading { display: flex; min-height: 2.8rem; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .operations-page__heading h1,
 .team-page__heading h1 { margin: 0; color: var(--navy-900); font-size: clamp(1.35rem, 2vw, 1.75rem); }
 .operations-toast,
@@ -427,6 +427,12 @@
 .team-pending-summary--attention { color: var(--warning-700); background: var(--warning-100); border-left-color: var(--warning-700); font-weight: 750; }
 .operations-pending-summary .button,
 .team-pending-summary .button { min-height: 2.1rem; padding: 0.35rem 0.6rem; font-size: 0.72rem; }
+
+.team-invitations { display: grid; gap: 0.5rem; padding: 0.85rem 1rem; border: 1px solid var(--slate-200); background: var(--white); }
+.team-invitations h2 { margin: 0 0 0.25rem; font-size: 1rem; }
+.team-invitation { display: grid; grid-template-columns: minmax(0, 1fr) 7rem 10rem; gap: 0.75rem; align-items: center; font-size: 0.9rem; }
+.activation-page > p,
+.activation-page form > p { margin: 0; }
 .operations-inline-warning { padding: 0.7rem 0.85rem; color: var(--warning-700); background: var(--warning-100); border-left: 3px solid var(--warning-700); font-size: 0.8rem; }
 .operations-search,
 .team-search { position: relative; display: flex; align-items: center; color: var(--slate-500); }
@@ -522,6 +528,8 @@
 .operations-confirmation-item span,
 .team-action-person span { color: var(--slate-500); font-size: 0.76rem; }
 .team-action-warning { margin: 0; padding: 0.7rem 0.8rem; color: var(--warning-700); background: var(--warning-100); border-left: 3px solid var(--warning-700); font-size: 0.78rem; line-height: 1.5; }
+.form-alert { display: grid; gap: 0.25rem; }
+.form-alert small { font-size: 0.75rem; font-weight: 500; }
 
 @media (max-width: 1180px) {
   .dashboard-operational-grid { grid-template-columns: minmax(0, 1.45fr) minmax(18rem, 0.75fr); }
@@ -762,6 +770,7 @@
   .inventory-history__item > div { align-items: flex-start; flex-direction: column; gap: 0.25rem; }
   .operations-pending-summary,
   .team-pending-summary { align-items: flex-start; flex-direction: column; }
+  .team-invitation { grid-template-columns: 1fr; gap: 0.15rem; }
   .operations-empty,
   .team-empty { align-items: stretch; flex-direction: column; }
   .operations-drawer__header,

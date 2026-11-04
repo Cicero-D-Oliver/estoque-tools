@@ -95,6 +95,9 @@ class PostgreSQLTestcontainersIntegrationTest {
         registry.add("spring.datasource.password", POSTGRESQL::getPassword);
         registry.add("app.security.jwt-secret",
                 () -> "dGVzdC1vbmx5LWp3dC1zaWduaW5nLWtleS0zMi1iISE=");
+        registry.add("app.registration.allowed-email-domains",
+                () -> "scaladatacenters.com,example.com");
+        registry.add("app.registration.public-registration-enabled", () -> "true");
     }
 
     @Autowired
@@ -160,12 +163,12 @@ class PostgreSQLTestcontainersIntegrationTest {
                  WHERE version IS NOT NULL
                  ORDER BY installed_rank
                 """);
-        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), migrations.stream()
+        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9"), migrations.stream()
                 .map(migration -> migration.get("version").toString())
                 .toList());
         assertTrue(migrations.stream()
                 .allMatch(migration -> Boolean.TRUE.equals(migration.get("success"))));
-        assertEquals("8", flyway.info().current().getVersion().toString());
+        assertEquals("9", flyway.info().current().getVersion().toString());
         assertEquals(2, jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                   FROM information_schema.tables
@@ -581,7 +584,7 @@ class PostgreSQLTestcontainersIntegrationTest {
                        AND senha_alterada_em IS NULL
                        AND ultimo_login_em IS NULL
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9"), historyVersions(statement));
         }
     }
 
@@ -621,7 +624,7 @@ class PostgreSQLTestcontainersIntegrationTest {
                     """));
             assertEquals(0, scalar(statement, "SELECT COUNT(*) FROM refresh_tokens"));
             assertEquals(0, scalar(statement, "SELECT COUNT(*) FROM tokens_recuperacao_senha"));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9"), historyVersions(statement));
         }
     }
 
@@ -698,7 +701,7 @@ class PostgreSQLTestcontainersIntegrationTest {
                        AND confirmado_por_usuario_id IS NULL
                        AND confirmado_em IS NULL
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9"), historyVersions(statement));
         }
     }
 
@@ -793,7 +796,7 @@ class PostgreSQLTestcontainersIntegrationTest {
                      WHERE schemaname = current_schema()
                        AND indexname = 'idx_mov_ferramenta_organizacao_revisao_id'
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"),
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9"),
                     historyVersions(statement));
         }
     }
@@ -876,7 +879,7 @@ class PostgreSQLTestcontainersIntegrationTest {
             assertEquals(5, scalar(statement, """
                     SELECT versao FROM ferramentas WHERE id = 301
                     """));
-            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), historyVersions(statement));
+            assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9"), historyVersions(statement));
         }
     }
 

@@ -70,6 +70,9 @@ export function teamRequestError(error: unknown): string {
   if (error.response.status === 403) return 'Você não pode realizar esta ação.';
   if (error.response.status === 409) return 'Os dados foram alterados. Atualize a tela.';
   const payload = error.response.data as { mensagem?: string };
+  if (/Usuário ainda não cadastrado/i.test(payload?.mensagem ?? '')) return 'Usuário ainda não cadastrado.';
+  if (/já faz parte da equipe/i.test(payload?.mensagem ?? '')) return 'Esta pessoa já faz parte da equipe.';
+  if (/e-mail corporativo/i.test(payload?.mensagem ?? '')) return payload.mensagem!;
   if (/ao menos um ADMIN/i.test(payload?.mensagem ?? '')) {
     return 'Este ambiente precisa manter ao menos um administrador.';
   }

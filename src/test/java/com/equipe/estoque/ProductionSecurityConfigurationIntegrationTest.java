@@ -18,7 +18,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {
         "app.cors.allowed-origins=https://estoque.example.test",
         "app.cors.allow-credentials=true",
-        "app.security.refresh-cookie.secure=true"
+        "app.security.refresh-cookie.secure=true",
+        "app.onboarding.initial-admin-email=admin@scaladatacenters.com",
+        "app.onboarding.initial-organization-name=Estoque Teste",
+        "app.onboarding.public-base-url=https://estoque.example.test",
+        "app.registration.public-registration-enabled=false",
+        "app.mail.delivery-mode=smtp",
+        "app.mail.from=estoque@scaladatacenters.com",
+        "spring.mail.host=smtp.example.test",
+        "spring.mail.properties.mail.smtp.auth=false"
 })
 @AutoConfigureMockMvc
 @ActiveProfiles({"test", "prod"})

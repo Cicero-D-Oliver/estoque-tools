@@ -159,7 +159,7 @@ $databaseRemoved = $false
 $isolatedSnapshot = $null
 $firstCounts = $null
 $secondCounts = $null
-$smokeEmail = "smoke-$runId@example.test"
+$smokeEmail = "smoke-$runId@scaladatacenters.com"
 $smokePassword = "SmokeSenha!2026"
 $jwtSecretBytes = [byte[]]::new(32)
 $randomNumberGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
@@ -189,6 +189,9 @@ function Start-SmokeBackend {
         SERVER_PORT = [string]$port
         SQLITE_URL = $sqliteUrl
         APP_JWT_SECRET = $jwtSecret
+        # Cadastro público é habilitado somente neste processo descartável para
+        # criar a fixture do smoke; o padrão corporativo e o profile prod seguem fechados.
+        APP_PUBLIC_REGISTRATION_ENABLED = "true"
     }
     $previousEnvironment = @{}
     foreach ($entry in $processEnvironment.GetEnumerator()) {

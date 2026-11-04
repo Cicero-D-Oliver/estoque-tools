@@ -6,15 +6,8 @@ export interface LoginInput {
   senha: string
 }
 
-export interface RegisterInput extends LoginInput {
-  nome: string
-}
-
 export const authService = {
   login: (input: LoginInput) => apiClient.post<AccessTokenResponse>('/api/auth/login', input, {
-    skipAuthRefresh: true,
-  }),
-  register: (input: RegisterInput) => apiClient.post<Account>('/api/auth/register', input, {
     skipAuthRefresh: true,
   }),
   restore: restoreSession,

@@ -2,11 +2,12 @@ import { QueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
 import { invalidateTeamCaches, teamKeys, teamService } from './team-service';
 
-jest.mock('@/api/client', () => ({ apiClient: { get: jest.fn(), put: jest.fn(), delete: jest.fn() } }));
+jest.mock('@/api/client', () => ({ apiClient: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() } }));
 
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(apiClient.get).mockResolvedValue({ data: [] });
+  jest.mocked(apiClient.post).mockResolvedValue({ data: {} });
   jest.mocked(apiClient.put).mockResolvedValue({ data: {} });
   jest.mocked(apiClient.delete).mockResolvedValue({ data: undefined });
 });
@@ -14,8 +15,19 @@ beforeEach(() => {
 test('lista membros e solicitações da organização real', async () => {
   await teamService.listMembers(10);
   await teamService.listPending(10);
+  await teamService.listInvitations(10);
   expect(apiClient.get).toHaveBeenNthCalledWith(1, '/api/organizacoes/10/membros', { organization: true });
   expect(apiClient.get).toHaveBeenNthCalledWith(2, '/api/organizacoes/10/solicitacoes', { organization: true });
+  expect(apiClient.get).toHaveBeenNthCalledWith(3, '/api/organizacoes/10/convites', { organization: true });
+});
+
+test('envia convite com e-mail e perfil sem enviar identidade do administrador', async () => {
+  await teamService.invite(10, 'ana@scaladatacenters.com', 'OPERADOR');
+  expect(apiClient.post).toHaveBeenCalledWith(
+    '/api/organizacoes/10/convites',
+    { email: 'ana@scaladatacenters.com', perfil: 'OPERADOR' },
+    { organization: true },
+  );
 });
 
 test('aprovação aceita somente perfil operacional enviado', async () => {

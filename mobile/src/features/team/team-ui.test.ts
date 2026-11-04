@@ -67,3 +67,12 @@ test('sanitiza regra do último ADMIN e sessão expirada', () => {
   expect(teamRequestError({ isAxiosError: true, response: { status: 400, data: { mensagem: 'Deve existir ao menos um ADMIN' } } })).toBe('Este ambiente precisa manter ao menos um administrador.');
   expect(teamRequestError({ isAxiosError: true, response: { status: 401, data: {} } })).toBe('Sua sessão expirou. Entre novamente.');
 });
+
+test('preserva mensagens funcionais do onboarding sem expor detalhes internos', () => {
+  expect(teamRequestError({ isAxiosError: true, response: { status: 400, data: { mensagem: 'Usuário ainda não cadastrado.' } } }))
+    .toBe('Usuário ainda não cadastrado.');
+  expect(teamRequestError({ isAxiosError: true, response: { status: 400, data: { mensagem: 'Esta pessoa já faz parte da equipe.' } } }))
+    .toBe('Esta pessoa já faz parte da equipe.');
+  expect(teamRequestError({ isAxiosError: true, response: { status: 403, data: { mensagem: 'detalhe interno' } } }))
+    .toBe('Você não pode realizar esta ação.');
+});
