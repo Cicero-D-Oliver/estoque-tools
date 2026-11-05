@@ -54,14 +54,14 @@ class OrganizationsFoundationIntegrationTest {
 
     @Test
     void deveCriarTabelasDaFundacaoEAplicarIsolamentoAteV4() {
-        assertEquals("8", flyway.info().current().getVersion().toString());
+        assertEquals("9", flyway.info().current().getVersion().toString());
         assertEquals(2, jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                   FROM sqlite_schema
                  WHERE type = 'table'
                    AND name IN ('organizacoes', 'organizacao_membros')
                 """, Integer.class));
-        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), jdbcTemplate.queryForList("""
+        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9"), jdbcTemplate.queryForList("""
                 SELECT version
                   FROM flyway_schema_history
                  WHERE version IS NOT NULL
@@ -125,6 +125,7 @@ class OrganizationsFoundationIntegrationTest {
     @Test
     void deveRejeitarDadosInvalidosSemCriarOrganizacao() {
         Usuario usuario = criarUsuario("Criador", "criador-invalido@example.com");
+        long organizacoesAntes = organizacaoRepository.count();
 
         assertThrows(BusinessException.class, () -> organizacaoService.criar(null, usuario.getId()));
         assertThrows(BusinessException.class, () -> organizacaoService.criar("   ", usuario.getId()));
@@ -140,7 +141,7 @@ class OrganizationsFoundationIntegrationTest {
                 BusinessException.class,
                 () -> organizacaoService.criar("Organização", usuario.getId())
         );
-        assertEquals(0, organizacaoRepository.count());
+        assertEquals(organizacoesAntes, organizacaoRepository.count());
     }
 
     private Usuario criarUsuario(String nome, String email) {

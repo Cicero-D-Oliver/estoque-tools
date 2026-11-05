@@ -59,7 +59,14 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/refresh",
                                 "/api/mobile/auth/login",
-                                "/api/mobile/auth/refresh"
+                                "/api/mobile/auth/refresh",
+                                "/api/onboarding/bootstrap",
+                                "/api/onboarding/ativacao"
+                        ).permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/onboarding/bootstrap/status",
+                                "/api/onboarding/ativacao"
                         ).permitAll()
                         .requestMatchers(
                                 "/actuator/health",

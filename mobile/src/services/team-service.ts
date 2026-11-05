@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
-import type { MemberProfile, OrganizationMember } from '@/types/api';
+import type { MemberProfile, OrganizationInvitation, OrganizationMember } from '@/types/api';
 
 export type TeamAction = 'approve' | 'profile' | 'remove';
 
@@ -8,11 +8,29 @@ export const teamKeys = {
   root: (organizationId: number) => ['organization', organizationId, 'team'] as const,
   members: (organizationId: number) => ['organization', organizationId, 'team', 'members'] as const,
   pending: (organizationId: number) => ['organization', organizationId, 'team', 'pending'] as const,
+  invitations: (organizationId: number) => ['organization', organizationId, 'team', 'invitations'] as const,
 };
 
 const organizationRequest = { organization: true } as const;
 
 export const teamService = {
+  invite: async (
+    organizationId: number,
+    email: string,
+    perfil: Exclude<MemberProfile, 'ADMIN'>,
+  ): Promise<OrganizationInvitation> => (
+    await apiClient.post<OrganizationInvitation>(
+      `/api/organizacoes/${organizationId}/convites`,
+      { email, perfil },
+      organizationRequest,
+    )
+  ).data,
+  listInvitations: async (organizationId: number): Promise<OrganizationInvitation[]> => (
+    await apiClient.get<OrganizationInvitation[]>(
+      `/api/organizacoes/${organizationId}/convites`,
+      organizationRequest,
+    )
+  ).data,
   listMembers: async (organizationId: number): Promise<OrganizationMember[]> => (
     await apiClient.get<OrganizationMember[]>(
       `/api/organizacoes/${organizationId}/membros`,

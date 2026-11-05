@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/Button'
 import { FeedbackState } from '../components/FeedbackState'
+import { AddTeamMemberDialog } from '../components/team/AddTeamMemberDialog'
 import { TeamActionDialog, type TeamAction } from '../components/team/TeamActionDialog'
 import { ApiError } from '../lib/api-client'
 import {
@@ -30,6 +31,9 @@ function teamError(error: Error | null): string | undefined {
   if (error.status === 401) return 'Sua sessão expirou. Entre novamente.'
   if (error.status === 403) return 'Você não tem permissão para esta ação.'
   if (error.status === 409) return 'Os dados foram alterados. Atualize a tela.'
+  if (/Usuário ainda não cadastrado/i.test(error.message)) return 'Usuário ainda não cadastrado.'
+  if (/já faz parte da equipe/i.test(error.message)) return 'Esta pessoa já faz parte da equipe.'
+  if (/e-mail corporativo/i.test(error.message)) return error.message
   if (/ao menos um ADMIN/i.test(error.message)) return 'Este ambiente precisa manter ao menos um administrador.'
   return 'Não foi possível atualizar o acesso.'
 }
@@ -43,6 +47,7 @@ export function TeamPage() {
   const [search, setSearch] = useState('')
   const [action, setAction] = useState<TeamAction | null>(null)
   const [selectedMember, setSelectedMember] = useState<OrganizationMember | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
 
   useEffect(() => {
@@ -50,6 +55,7 @@ export function TeamPage() {
     setSearch('')
     setAction(null)
     setSelectedMember(null)
+    setAddOpen(false)
     setFeedback(null)
   }, [organizationId])
 
@@ -61,6 +67,11 @@ export function TeamPage() {
   const pendingQuery = useQuery({
     queryKey: organizationId ? teamKeys.pending(organizationId) : [...teamKeys.all, 'pending'],
     queryFn: () => teamService.listPending(organizationId!),
+    enabled: Boolean(organizationId),
+  })
+  const invitationsQuery = useQuery({
+    queryKey: organizationId ? teamKeys.invitations(organizationId) : [...teamKeys.all, 'invitations'],
+    queryFn: () => teamService.listInvitations(organizationId!),
     enabled: Boolean(organizationId),
   })
 
@@ -104,16 +115,34 @@ export function TeamPage() {
     },
   })
 
+  const addMutation = useMutation({
+    mutationFn: async ({ email, profile }: { email: string; profile: Exclude<MemberProfile, 'ADMIN'> }) => {
+      if (!organizationId) throw new Error('Organização não selecionada')
+      return teamService.invite(organizationId, email, profile)
+    },
+    onSuccess: async () => {
+      setFeedback('Convite enviado.')
+      setAddOpen(false)
+      if (!organizationId) return
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: teamKeys.members(organizationId) }),
+        queryClient.invalidateQueries({ queryKey: teamKeys.pending(organizationId) }),
+        queryClient.invalidateQueries({ queryKey: teamKeys.invitations(organizationId) }),
+        queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+      ])
+    },
+  })
+
   const openAction = (requestedAction: TeamAction, member: OrganizationMember) => {
     mutation.reset()
     setSelectedMember(member)
     setAction(requestedAction)
   }
 
-  if (membersQuery.isLoading || pendingQuery.isLoading) {
+  if (membersQuery.isLoading || pendingQuery.isLoading || invitationsQuery.isLoading) {
     return <FeedbackState type="loading" title="Carregando equipe" message="Consultando os acessos deste ambiente." />
   }
-  if (membersQuery.error || pendingQuery.error) {
+  if (membersQuery.error || pendingQuery.error || invitationsQuery.error) {
     return (
       <FeedbackState
         type="error"
@@ -130,7 +159,10 @@ export function TeamPage() {
 
   return (
     <div className="team-page">
-      <header className="team-page__heading"><h1>Equipe</h1></header>
+      <header className="team-page__heading">
+        <h1>Equipe</h1>
+        <Button onClick={() => { addMutation.reset(); setAddOpen(true) }}>Convidar pessoa</Button>
+      </header>
 
       {feedback && (
         <div className="team-toast" role="status">
@@ -145,6 +177,21 @@ export function TeamPage() {
           : 'Nenhum acesso aguardando aprovação.'}</span>
         {pendingCount > 0 && <Button variant="ghost" onClick={() => setFilter('pending')}>Ver solicitações</Button>}
       </div>
+
+      {(invitationsQuery.data?.length ?? 0) > 0 && (
+        <section className="team-invitations" aria-label="Convites da equipe">
+          <h2>Convites</h2>
+          {invitationsQuery.data?.map((invitation) => (
+            <div className="team-invitation" key={invitation.id}>
+              <span>{invitation.email}</span>
+              <span>{profileLabels[invitation.perfil]}</span>
+              <strong>{invitation.status === 'PENDENTE'
+                ? 'Aguardando ativação'
+                : invitation.status === 'CONFIRMADO' ? 'Ativado' : invitation.status === 'EXPIRADO' ? 'Expirado' : 'Revogado'}</strong>
+            </div>
+          ))}
+        </section>
+      )}
 
       <div className="team-search">
         <Search size={20} aria-hidden="true" />
@@ -220,6 +267,15 @@ export function TeamPage() {
         onSubmit={(profile) => {
           if (!action || !selectedMember) return
           void mutation.mutateAsync({ action, member: selectedMember, profile }).catch(() => undefined)
+        }}
+      />
+      <AddTeamMemberDialog
+        open={addOpen}
+        pending={addMutation.isPending}
+        error={teamError(addMutation.error)}
+        onClose={() => { if (!addMutation.isPending) { setAddOpen(false); addMutation.reset() } }}
+        onSubmit={(email, profile) => {
+          void addMutation.mutateAsync({ email, profile }).catch(() => undefined)
         }}
       />
     </div>

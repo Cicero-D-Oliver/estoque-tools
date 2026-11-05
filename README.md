@@ -22,6 +22,7 @@ TypeScript e Vite.
 - Perfis separados para SQLite e PostgreSQL.
 - Schema versionado por Flyway e validado pelo Hibernate.
 - JWT curto em memória, refresh cookie HttpOnly rotativo, revogação de sessões e proteção contra força bruta.
+- Onboarding corporativo fechado por convite, confirmação real de e-mail e bootstrap administrativo de uso único.
 - Interface React responsiva para os fluxos operacionais do MVP.
 
 ## Arquitetura
@@ -217,6 +218,19 @@ O banco fica no volume `estoque_postgres_data`. `docker compose down -v` também
 | `APP_PASSWORD_RESET_TOKEN_TTL` | `30m` | validade da recuperação interna |
 | `APP_MAX_FAILED_LOGIN_ATTEMPTS` | `5` | falhas consecutivas antes do bloqueio |
 | `APP_LOGIN_LOCK_DURATION` | `15m` | duração do bloqueio temporário |
+| `APP_ALLOWED_EMAIL_DOMAINS` | `scaladatacenters.com` | domínios exatos aceitos no bootstrap e nos convites |
+| `APP_PUBLIC_REGISTRATION_ENABLED` | `false` | compatibilidade de teste; deve permanecer `false` em produção |
+| `APP_INITIAL_ADMIN_EMAIL` | sem padrão | único e-mail autorizado para o bootstrap inicial |
+| `APP_INITIAL_ORGANIZATION_NAME` | sem padrão | organização criada ao concluir o bootstrap |
+| `APP_PUBLIC_BASE_URL` | sem padrão | URL HTTPS do frontend usada nos links de ativação |
+| `APP_EMAIL_VERIFICATION_TOKEN_TTL` | `30m` | validade do token de confirmação |
+| `APP_INVITATION_RESEND_COOLDOWN` | `5m` | intervalo mínimo para emitir outro token |
+| `APP_MAIL_DELIVERY_MODE` | `disabled` | adaptador `disabled`, `memory` (testes) ou `smtp` |
+| `APP_MAIL_FROM` | sem padrão | remetente dos convites |
+| `MAIL_HOST`, `MAIL_PORT` | vazio, `587` | servidor SMTP externo |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | sem padrão | credenciais SMTP quando autenticação estiver ativa |
+| `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS` | `true`, `true` | autenticação e STARTTLS do SMTP |
+| `MAIL_HEALTH_ENABLED` | `false` (`true` em `prod`) | inclui conectividade SMTP no healthcheck |
 | `FLYWAY_BASELINE_ON_MIGRATE` | `false` | opt-in exclusivo para incorporar SQLite legado já verificado |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | origens web permitidas, separadas por vírgula |
 | `CORS_ALLOWED_METHODS` | `GET,POST,PUT,DELETE,OPTIONS` | métodos CORS |
@@ -229,6 +243,25 @@ O banco fica no volume `estoque_postgres_data`. `docker compose down -v` também
 | `SPRINGDOC_SWAGGER_UI_ENABLED` | `true` | habilita Swagger UI |
 
 Nunca versione `.env`, bancos locais ou arquivos de log. O `.gitignore` já cobre esses arquivos.
+
+### Onboarding corporativo
+
+Não há cadastro público no modo normal. Na primeira implantação, somente o
+endereço exato de `APP_INITIAL_ADMIN_EMAIL` pode solicitar o link inicial. A
+confirmação cria a senha, a organização configurada e o primeiro vínculo ADMIN;
+o estado persistente impede repetir o bootstrap.
+
+Depois disso, um ADMIN da própria organização envia convites pela tela Equipe,
+sempre como `OPERADOR` ou `CONSULTA`. O e-mail precisa corresponder exatamente a
+um domínio de `APP_ALLOWED_EMAIL_DOMAINS`. O token é opaco, armazenado somente
+como hash, expira e só pode ser usado uma vez. Contas existentes não são
+recriadas nem têm sua senha substituída; usuários legados sem credencial podem
+definir a senha ao confirmar o convite. Pessoas removidas só voltam a ficar
+ativas depois de nova confirmação.
+
+O link abre `/ativar?token=...` no frontend Web responsivo. O Android não possui
+cadastro público nem precisa de deep link neste piloto; depois da ativação Web,
+o usuário entra normalmente no aplicativo.
 
 ## Scripts
 
@@ -269,8 +302,9 @@ chmod +x scripts/linux-macos/*.sh
 mvn clean verify
 ```
 
-A suíte backend contém atualmente 112 testes; a suíte frontend possui
-172 testes. Elas atravessam HTTP, validação, services, repositories, segurança,
+A suíte backend contém atualmente 141 testes; a suíte frontend possui
+180 testes e a suíte Android possui 167 testes. Elas atravessam HTTP, validação,
+services, repositories, segurança,
 SQLite e PostgreSQL 17 via Testcontainers, além de
 exercitar migrações Flyway, assinatura integral do baseline, sessões rotativas,
 revogação, força bruta, isolamento entre organizações, fluxo operacional de
@@ -300,14 +334,15 @@ Use `-KeepArtifacts` somente para diagnóstico local; o comportamento padrão é
 ### Integração contínua
 
 A pipeline `.github/workflows/ci.yml` usa Java 17 e cache Maven. Em pushes e
-pull requests ela executa `mvn clean verify`, exige no mínimo os 112 testes do
-baseline atual e confirma a execução das treze classes de teste esperadas. O
+pull requests ela executa `mvn clean verify`, exige no mínimo os 141 testes do
+baseline atual e confirma explicitamente todas as classes obrigatórias. O
 workflow rejeita falhas, erros, testes ignorados ou relatórios Surefire
 ausentes, mas permite que novos testes aumentem o total sem exigir manutenção
 da contagem. JaCoCo, PMD, CPD e o smoke test SQLite isolado continuam
-obrigatórios. Um job separado usa Node.js 24, `npm ci`, exige no mínimo 172
-testes React e gera o build de produção. Não há publicação, deploy ou secrets
-de produção.
+obrigatórios. Jobs separados usam Node.js 24 e `npm ci`, exigem no mínimo 180
+testes React e 167 testes Android, validam TypeScript, Expo SDK 57, bundle Hermes
+e a política de auditoria descrita em `MOBILE_SECURITY_AUDIT.md`. Não há
+publicação, deploy ou secrets de produção.
 
 ## Contrato HTTP e erros
 
@@ -420,7 +455,8 @@ rotação de `APP_JWT_SECRET` e o limite atual da recuperação de senha.
 - secrets externos para `APP_JWT_SECRET`, usuário e senha do banco;
 - origem pública do frontend na allowlist CORS, com credenciais habilitadas;
 - refresh cookie com `Secure=true`, `HttpOnly`, `Path=/api/auth` e `SameSite` adequado à topologia;
-- Flyway V1–V8 aplicado no startup e Hibernate com `ddl-auto=validate`;
+- Flyway V1–V9 aplicado no startup e Hibernate com `ddl-auto=validate`;
+- cadastro público desabilitado, bootstrap inicial configurado e SMTP real disponível;
 - healthcheck em `/actuator/health`, usado pelo orquestrador sem expor detalhes internos;
 - backups periódicos e restauração do PostgreSQL testada;
 - coleta de logs, monitoramento de disponibilidade e alertas operacionais.

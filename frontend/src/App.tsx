@@ -2,9 +2,10 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
+import { ActivationPage } from './pages/ActivationPage'
+import { BootstrapPage } from './pages/BootstrapPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { OrganizationsPage } from './pages/OrganizationsPage'
-import { RegisterPage } from './pages/RegisterPage'
 import { ToolsPage } from './pages/ToolsPage'
 import { InventoryPage } from './pages/InventoryPage'
 import { MovementsPage } from './pages/MovementsPage'
@@ -17,7 +18,9 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/cadastro" element={<RegisterPage />} />
+      <Route path="/ativar-admin" element={<BootstrapPage />} />
+      <Route path="/ativar" element={<ActivationPage />} />
+      <Route path="/cadastro" element={<Navigate to="/login" replace />} />
 
       <Route element={<ProtectedRoute />}>
         <Route path="/organizacoes" element={<OrganizationsPage />} />

@@ -55,12 +55,22 @@ interface TeamFetchOptions {
   empty?: boolean
   failList?: boolean
   includeForeign?: boolean
+  addError?: 'missing' | 'active' | 'forbidden'
 }
 
 function teamFetch(options: TeamFetchOptions = {}) {
   const organization: Organization = { ...organizationFixture, perfil: options.profile ?? 'ADMIN' }
   const members = structuredClone(options.empty ? [] : activeMembers)
   const pending = structuredClone(options.empty ? [] : pendingMembers)
+  const invitations: Array<{
+    id: number
+    email: string
+    perfil: 'OPERADOR' | 'CONSULTA'
+    status: 'PENDENTE' | 'CONFIRMADO' | 'EXPIRADO' | 'REVOGADO'
+    enviadoEm: string
+    expiraEm: string
+    confirmadoEm: string | null
+  }> = []
   if (options.includeForeign) {
     members.push({ ...activeMembers[1], id: 99, organizacaoId: 99, usuarioNome: 'Pessoa de outra organização' })
   }
@@ -68,11 +78,12 @@ function teamFetch(options: TeamFetchOptions = {}) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
-    const payload = init?.body ? JSON.parse(String(init.body)) as { perfil?: MemberProfile } : {}
+    const payload = init?.body ? JSON.parse(String(init.body)) as { email?: string; perfil?: MemberProfile } : {}
     const approveMatch = url.match(/\/api\/organizacoes\/12\/solicitacoes\/(\d+)\/aprovacao$/)
     const profileMatch = url.match(/\/api\/organizacoes\/12\/membros\/(\d+)\/perfil$/)
     const memberMatch = url.match(/\/api\/organizacoes\/12\/membros\/(\d+)$/)
 
+    if (url.endsWith('/api/onboarding/bootstrap/status')) return jsonResponse({ disponivel: false })
     if (url.endsWith('/api/auth/login')) return jsonResponse(sessionFixture)
     if (url.endsWith('/api/auth/me')) return jsonResponse(accountFixture)
     if (url.endsWith('/api/organizacoes')) return jsonResponse([organization])
@@ -81,6 +92,28 @@ function teamFetch(options: TeamFetchOptions = {}) {
     if (url.endsWith('/api/movimentacoes-ferramenta/pendentes')) return jsonResponse([])
     if (url.endsWith('/api/movimentacoes-ferramenta')) return jsonResponse([])
     if (url.endsWith('/api/itens/abaixo-minimo')) return jsonResponse([])
+    if (url.endsWith('/api/organizacoes/12/convites') && method === 'POST') {
+      if (options.addError === 'missing') {
+        return jsonResponse({ codigo: 'REGRA_NEGOCIO', mensagem: 'Usuário ainda não cadastrado.' }, 400)
+      }
+      if (options.addError === 'active') {
+        return jsonResponse({ codigo: 'REGRA_NEGOCIO', mensagem: 'Esta pessoa já faz parte da equipe.' }, 400)
+      }
+      if (options.addError === 'forbidden') {
+        return jsonResponse({ codigo: 'ACESSO_NEGADO', mensagem: 'Acesso negado.' }, 403)
+      }
+      const added = {
+        id: 4,
+        email: payload.email ?? '',
+        perfil: payload.perfil ?? 'OPERADOR',
+        status: 'PENDENTE' as const,
+        enviadoEm: '2026-11-03T10:00:00',
+        expiraEm: '2026-11-03T10:30:00',
+        confirmadoEm: null,
+      }
+      invitations.push(added as typeof invitations[number])
+      return jsonResponse(added, 201)
+    }
     if (approveMatch && method === 'PUT') {
       const index = pending.findIndex((member) => member.id === Number(approveMatch[1]))
       const [member] = pending.splice(index, 1)
@@ -100,6 +133,7 @@ function teamFetch(options: TeamFetchOptions = {}) {
       return new Response(null, { status: 204 })
     }
     if (url.endsWith('/api/organizacoes/12/solicitacoes')) return jsonResponse(pending)
+    if (url.endsWith('/api/organizacoes/12/convites')) return jsonResponse(invitations)
     if (url.endsWith('/api/organizacoes/12/membros')) {
       if (options.failList) return jsonResponse({ codigo: 'ERRO_INTERNO', detalhe: 'stack interno' }, 500)
       return jsonResponse(members)
@@ -146,9 +180,60 @@ describe('gestão operacional da equipe', () => {
 
   it('mostra ações administrativas para ADMIN', async () => {
     await openTeam()
+    expect(screen.getByRole('button', { name: 'Convidar pessoa' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Aprovar' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Alterar perfil' }).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('button', { name: 'Remover' }).length).toBeGreaterThan(0)
+  })
+
+  it('envia convite corporativo com perfil operacional e atualiza a lista', async () => {
+    const { fetchMock } = await openTeam()
+    await userEvent.click(screen.getByRole('button', { name: 'Convidar pessoa' }))
+    const dialog = screen.getByRole('dialog', { name: 'Convidar pessoa' })
+    expect(within(dialog).getByText('Use um endereço @scaladatacenters.com.')).toBeInTheDocument()
+    expect(within(dialog).getAllByRole('option').map((option) => option.textContent)).toEqual(['Operador', 'Consulta'])
+    await userEvent.type(within(dialog).getByLabelText('E-mail corporativo'), 'Carlos@ScalaDataCenters.com')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Perfil'), 'CONSULTA')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar convite' }))
+
+    expect(await screen.findByText('Convite enviado.')).toBeInTheDocument()
+    const call = requestCall(fetchMock, '/api/organizacoes/12/convites', 'POST')
+    expect(call?.[1]?.body).toBe(JSON.stringify({
+      email: 'carlos@scaladatacenters.com',
+      perfil: 'CONSULTA',
+    }))
+    expect(await screen.findByText('carlos@scaladatacenters.com')).toBeInTheDocument()
+  })
+
+  it('exibe erro funcional de convite sem orientar cadastro público', async () => {
+    await openTeam({ addError: 'missing' })
+    await userEvent.click(screen.getByRole('button', { name: 'Convidar pessoa' }))
+    const dialog = screen.getByRole('dialog', { name: 'Convidar pessoa' })
+    await userEvent.type(within(dialog).getByLabelText('E-mail corporativo'), 'nova@scaladatacenters.com')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar convite' }))
+
+    expect(await within(dialog).findByText('Usuário ainda não cadastrado.')).toBeInTheDocument()
+    expect(within(dialog).queryByText('Peça para a pessoa criar a conta e tente novamente.')).not.toBeInTheDocument()
+  })
+
+  it('informa quando a pessoa já pertence à equipe', async () => {
+    await openTeam({ addError: 'active' })
+    await userEvent.click(screen.getByRole('button', { name: 'Convidar pessoa' }))
+    const dialog = screen.getByRole('dialog', { name: 'Convidar pessoa' })
+    await userEvent.type(within(dialog).getByLabelText('E-mail corporativo'), 'joao@scaladatacenters.com')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar convite' }))
+
+    expect(await within(dialog).findByText('Esta pessoa já faz parte da equipe.')).toBeInTheDocument()
+  })
+
+  it('mantém erro de permissão sanitizado no onboarding', async () => {
+    await openTeam({ addError: 'forbidden' })
+    await userEvent.click(screen.getByRole('button', { name: 'Convidar pessoa' }))
+    const dialog = screen.getByRole('dialog', { name: 'Convidar pessoa' })
+    await userEvent.type(within(dialog).getByLabelText('E-mail corporativo'), 'nova@scaladatacenters.com')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar convite' }))
+
+    expect(await within(dialog).findByText('Você não tem permissão para esta ação.')).toBeInTheDocument()
   })
 
   it('não oferece ações que removeriam o último administrador', async () => {

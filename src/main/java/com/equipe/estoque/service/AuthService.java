@@ -13,8 +13,10 @@ import com.equipe.estoque.exception.InvalidCredentialsException;
 import com.equipe.estoque.exception.ResourceNotFoundException;
 import com.equipe.estoque.repository.UsuarioRepository;
 import com.equipe.estoque.security.AuthenticatedAccount;
+import com.equipe.estoque.security.EmailDomainPolicy;
 import com.equipe.estoque.security.PasswordPolicy;
 import com.equipe.estoque.config.SecurityProperties;
+import com.equipe.estoque.config.RegistrationProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -41,11 +43,17 @@ public class AuthService {
     private final AuthenticatedAccount authenticatedAccount;
     private final PasswordPolicy passwordPolicy;
     private final SecurityProperties securityProperties;
+    private final EmailDomainPolicy emailDomainPolicy;
+    private final RegistrationProperties registrationProperties;
 
     @Transactional
     public AccountResponseDTO register(RegisterRequestDTO request) {
+        if (!registrationProperties.isPublicRegistrationEnabled()) {
+            throw new BusinessException("Cadastro público indisponível. Use um convite.");
+        }
         passwordPolicy.validate(request.getSenha());
         String email = normalizeEmail(request.getEmail());
+        emailDomainPolicy.validate(email);
         if (usuarioRepository.findByEmailIgnoreCase(email).isPresent()) {
             throw new BusinessException("Não foi possível criar a conta com os dados informados");
         }

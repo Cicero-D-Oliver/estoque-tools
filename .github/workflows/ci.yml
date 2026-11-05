@@ -38,6 +38,7 @@ jobs:
           $expectedSuites = @(
             "com.equipe.estoque.ApplicationFlowIntegrationTest",
             "com.equipe.estoque.AuthenticationSecurityIntegrationTest",
+            "com.equipe.estoque.EmailDomainPolicyTest",
             "com.equipe.estoque.HardeningIntegrationTest",
             "com.equipe.estoque.MobileAuthenticationIntegrationTest",
             "com.equipe.estoque.OrganizationDataIsolationIntegrationTest",
@@ -45,13 +46,15 @@ jobs:
             "com.equipe.estoque.OrganizationsFoundationIntegrationTest",
             "com.equipe.estoque.PostgreSQLTestcontainersIntegrationTest",
             "com.equipe.estoque.ProductionSecurityConfigurationIntegrationTest",
+            "com.equipe.estoque.PublicRegistrationDisabledIntegrationTest",
             "com.equipe.estoque.SecuritySessionHardeningIntegrationTest",
+            "com.equipe.estoque.TeamMemberOnboardingIntegrationTest",
             "com.equipe.estoque.ToolBackendReadinessIntegrationTest",
             "com.equipe.estoque.ToolOperationalWorkflowIntegrationTest",
             "com.equipe.estoque.ToolWithdrawalConcurrencyIntegrationTest",
             "com.equipe.estoque.config.SQLiteLegacyBaselineCallbackTest"
           )
-          $minimumTests = 118
+          $minimumTests = 141
           $total = 0
           $executedSuites = @()
           foreach ($report in $reports) {
@@ -141,7 +144,7 @@ jobs:
         run: npm run test -- --reporter=json --outputFile=vitest-results.json
 
       - name: Validar resultado dos testes
-        run: node scripts/verify-test-results.mjs vitest-results.json 172
+        run: node scripts/verify-test-results.mjs vitest-results.json 180
 
       - name: Build de produção
         run: npm run build
@@ -187,10 +190,14 @@ jobs:
         run: npm run test:ci -- --json --outputFile=jest-results.json
 
       - name: Validar resultado dos testes
-        run: node scripts/verify-test-results.mjs jest-results.json 149
-
-      - name: Auditar dependências
-        run: npm audit --audit-level=moderate
+        run: node scripts/verify-test-results.mjs jest-results.json 167
 
       - name: Gerar bundle Android
         run: npm run export:android
+
+      - name: Auditar dependências e aplicar política mobile
+        shell: bash
+        run: |
+          npm audit --json > npm-audit.json || true
+          npm audit --omit=dev --json > npm-audit-runtime.json || true
+          node scripts/verify-audit-results.mjs npm-audit.json npm-audit-runtime.json

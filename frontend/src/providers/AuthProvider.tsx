@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { organizationStore } from '../lib/organization-store'
 import { sessionStore } from '../lib/session-store'
-import { authService, type LoginInput, type RegisterInput } from '../services/auth-service'
+import { authService, type LoginInput } from '../services/auth-service'
 import type { Account } from '../types/api'
 
 type AuthStatus = 'anonymous' | 'restoring' | 'authenticating' | 'authenticated'
@@ -10,7 +10,6 @@ interface AuthContextValue {
   status: AuthStatus
   account: Account | null
   login: (input: LoginInput) => Promise<Account>
-  register: (input: RegisterInput) => Promise<Account>
   logout: () => Promise<void>
 }
 
@@ -70,11 +69,6 @@ export function AuthProvider({
     }
   }, [])
 
-  const register = useCallback(async (input: RegisterInput) => {
-    await authService.register(input)
-    return login({ email: input.email, senha: input.senha })
-  }, [login])
-
   const logout = useCallback(async () => {
     try {
       if (sessionStore.get()) {
@@ -85,11 +79,10 @@ export function AuthProvider({
     }
   }, [])
 
-  const value = useMemo(() => ({ status, account, login, register, logout }), [
+  const value = useMemo(() => ({ status, account, login, logout }), [
     account,
     login,
     logout,
-    register,
     status,
   ])
 

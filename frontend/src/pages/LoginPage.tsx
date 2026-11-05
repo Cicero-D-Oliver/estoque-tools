@@ -6,6 +6,7 @@ import { Field } from '../components/Field'
 import { PasswordInput } from '../components/PasswordInput'
 import { ApiError } from '../lib/api-client'
 import { useAuth } from '../providers/AuthProvider'
+import { onboardingService } from '../services/onboarding-service'
 
 interface LoginFormErrors {
   email?: string
@@ -20,6 +21,15 @@ export function LoginPage() {
   const [senha, setSenha] = useState('')
   const [errors, setErrors] = useState<LoginFormErrors>({})
   const [submitError, setSubmitError] = useState('')
+  const [bootstrapAvailable, setBootstrapAvailable] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    void onboardingService.bootstrapStatus()
+      .then((response) => { if (active) setBootstrapAvailable(response.disponivel) })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -80,7 +90,11 @@ export function LoginPage() {
         <Button type="submit" loading={status === 'authenticating'}>
           Entrar
         </Button>
-        <Link className="auth-form__switch auth-form__switch--link" to="/cadastro">Criar conta</Link>
+        {bootstrapAvailable && (
+          <Link className="auth-form__switch auth-form__switch--link" to="/ativar-admin">
+            Ativar administrador inicial
+          </Link>
+        )}
       </form>
     </AuthLayout>
   )
